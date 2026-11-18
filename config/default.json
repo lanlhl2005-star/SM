@@ -56,20 +56,6 @@
     "mediaTypes": ["image"],
     "maxConcurrentDownloads": 2,
     "heartbeatStaleMs": 120000,
-    "fallbackGroup": "unmapped",
-    "groupMap": {
-      "site-memo": {
-        "matchNames": ["site memo", "site-memo", "Site Memo"]
-      },
-      "material-delivery": {
-        "matchNames": ["material delivery", "material-delivery", "Material Delivery"]
-      },
-      "internal": {
-        "matchNames": ["internal", "internal communication", "Internal"]
-      },
-      "bim-coordination": {
-        "matchNames": ["bim", "bim coordination", "BIM coordination", "BIM"]
-      }
-    }
+    "individualFolder": "individual"
   }
 }

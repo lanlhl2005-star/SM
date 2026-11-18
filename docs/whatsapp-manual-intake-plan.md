@@ -60,25 +60,19 @@ SM-{nn} {short subject} ({status})
 \\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup
 ```
 
-Sibling of `Site Memo` under the same project. One folder per WA group, each with required day folders:
+Sibling of `Site Memo` under the same project. One folder per WA **group subject** (live display name, sanitized), plus `individual` for 1:1 chats; each with required day folders:
 
 ```text
 \\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\
-  site-memo/
+  <WhatsApp group name>/
     YYYY-MM-DD/          # required day folder
       <original-filename>
-  material-delivery/
-    YYYY-MM-DD/
-      …
-  internal/
-    YYYY-MM-DD/
-      …
-  bim-coordination/
+  individual/
     YYYY-MM-DD/
       …
 ```
 
-Add further group folders as new project groups appear (kebab-case). Do not store backup media under the Site Memo root.
+Baileys creates group folders from the live subject automatically (no kebab-case alias map). Do not store backup media under the Site Memo root.
 
 **Rules**
 
@@ -100,7 +94,7 @@ Practical options that fit **manual drop** (pick one primary; others as fallback
 
 | Option | How | Fit |
 | --- | --- | --- |
-| **A. Baileys linked device (primary)** | On a Windows PC: `npm run wa-link` once (spare Linked devices slot), then `npm run wa-backup`. Incoming group photos → `Group_photo_backup\<group>\YYYY-MM-DD\` by WhatsApp group subject. Phone/Desktop daily use undisturbed. **Do not** QR-link from cloud. See `docs/whatsapp-baileys-backup.md`. | Preferred continuous backup |
+| **A. Baileys linked device (primary)** | On a Windows PC: `npm run wa-link` once (spare Linked devices slot), then `npm run wa-backup`. Incoming group photos → `Group_photo_backup\<group subject>\YYYY-MM-DD\`; 1:1 → `individual\YYYY-MM-DD\`. Phone/Desktop daily use undisturbed. **Do not** QR-link from cloud. See `docs/whatsapp-baileys-backup.md`. | Preferred continuous backup |
 | **B. Export chat media** | Export that group’s chat **with media**, unzip/copy images into that day’s folder under the group. | Best occasional batch |
 | **C. Desktop WhatsApp + copy** | Open the group in WhatsApp Desktop; save/download images into that day’s folder under the group. | Good for frequent drops |
 | **D. Shared sync folder** | Colleagues save photos from a group into a share that mirrors `Group_photo_backup\<group>\YYYY-MM-DD\`. | Good if everyone already uses a share |

@@ -4,12 +4,19 @@ import {
   dayFolderFromTs,
   nextAvailableFileName,
   resolveFileStem,
+  sanitizeFolderName,
   sanitizeStem,
 } from "../src/wa-backup/naming.js";
 
 test("sanitizeStem strips illegal Windows chars", () => {
   assert.equal(sanitizeStem('Photo: "stair"/clash?'), "Photo stair clash");
   assert.equal(sanitizeStem(""), "");
+});
+
+test("sanitizeFolderName keeps Unicode and blocks reserved names", () => {
+  assert.equal(sanitizeFolderName("CMI 火炭 MVAC"), "CMI 火炭 MVAC");
+  assert.equal(sanitizeFolderName("con"), "_con");
+  assert.equal(sanitizeFolderName('A:B/C|D?*'), "A B C D");
 });
 
 test("resolveFileStem prefers caption then filename", () => {

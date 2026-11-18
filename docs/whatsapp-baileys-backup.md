@@ -24,14 +24,22 @@ The Desktop media-cache watcher (`npm run backup-watch`) remains as an **optiona
 ## Destination (same as Draft UI)
 
 ```text
-\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\<group>\YYYY-MM-DD\
+\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\<WhatsApp group name>\YYYY-MM-DD\
+\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\individual\YYYY-MM-DD\
 ```
 
 Configured via `PHOTO_BACKUP_ROOT` (or mock when `USE_MOCK=true`). Day folders use **Asia/Hong_Kong**.
 
-Default groups: `site-memo`, `material-delivery`, `internal`, `bim-coordination`, plus fallback `unmapped`.
+Folder naming (no keyword aliases):
 
-Group subject → folder mapping lives in `config/default.json` → `whatsappBaileys.groupMap.<folder>.matchNames`. Edit aliases to match the **exact WhatsApp group titles** on the phone.
+| Chat | Backup folder |
+| --- | --- |
+| WhatsApp **group** | Live group **subject** (display name), sanitized for Windows/UNC; Chinese/Unicode kept |
+| **1:1** / individual | `individual` |
+
+Illegal path characters (`<>:"/\|?*` and controls) are replaced; trailing dots/spaces stripped. There is **no** `site-memo` / `unmapped` alias map — the on-disk folder is the group title itself.
+
+For the Draft UI, set `PHOTO_GROUP` (or `config.photoGroup`) to the **same sanitized group title** as the site-memo WhatsApp group so browse targets the right tree.
 
 ---
 
@@ -102,8 +110,8 @@ Leave it running (or register Task Scheduler **At log on** → `scripts\wa-run-d
 
 ### 4. Verify
 
-1. From another account (or a contact), send a photo into a mapped project group.
-2. Confirm a file appears under `Group_photo_backup\<group>\YYYY-MM-DD\`.
+1. From another account (or a contact), send a photo into a project WhatsApp group.
+2. Confirm a file appears under `Group_photo_backup\<that group’s subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\` for a 1:1 chat).
 3. Restart `npm run wa-backup` — the same message must **not** duplicate (JSON state dedupe).
 
 ### Re-link after logout
@@ -137,9 +145,8 @@ Restart the daemon after every pull so it picks up code changes (auth under `.wa
 
 | Saved | Skipped |
 | --- | --- |
-| Incoming **image** (default `mediaTypes`) | Outgoing (`fromMe`) |
-| | Audio, stickers, PTT (and video/document unless you extend `mediaTypes`) |
-| | 1:1 chats → `unmapped\YYYY-MM-DD\` (or configure as needed) |
+| Incoming **image** (default `mediaTypes`) from groups → `<group subject>\YYYY-MM-DD\` | Outgoing (`fromMe`) |
+| Incoming **image** from 1:1 → `individual\YYYY-MM-DD\` | Audio, stickers, PTT (and video/document unless you extend `mediaTypes`) |
 
 Filename: caption (sanitized) → else original file stem → else `WA_<msgid>.ext`. Collisions → `name_2.ext`.
 

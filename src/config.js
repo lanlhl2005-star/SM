@@ -152,13 +152,11 @@ export const config = {
         baileysDefaults.heartbeatStaleMs ||
         120000
     ),
-    fallbackGroup:
-      process.env.WA_FALLBACK_GROUP ||
-      baileysDefaults.fallbackGroup ||
-      waDefaults.fallbackGroup ||
-      "unmapped",
-    // Prefer Baileys groupMap; fall back to Desktop aliases so one edit covers both.
-    groupMap: baileysDefaults.groupMap || waDefaults.groupMap || {},
+    // Live WhatsApp group subject → folder; 1:1 chats use this name.
+    individualFolder:
+      process.env.WA_INDIVIDUAL_FOLDER ||
+      baileysDefaults.individualFolder ||
+      "individual",
   },
 };
 

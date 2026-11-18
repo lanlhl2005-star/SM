@@ -1,55 +1,53 @@
 /**
- * Map WhatsApp group subject → configured Group_photo_backup folder key.
- * Uses matchNames / matchSubjects from config (same aliases as Desktop watcher).
+ * Resolve Group_photo_backup folder from live WhatsApp chat context.
+ * Groups → sanitized group subject; 1:1 → "individual".
+ * No keyword / alias mapping.
  */
 
-function normalize(s) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+import { sanitizeFolderName } from "./naming.js";
+
+export const INDIVIDUAL_FOLDER = "individual";
 
 /**
- * @param {string|null|undefined} subject  WhatsApp group display name
- * @param {object} groupMap  { "site-memo": { matchNames: [...] }, ... }
- * @param {string} fallbackGroup
- * @returns {{ group: string, reason: string }}
+ * @param {object} opts
+ * @param {boolean} opts.isGroup
+ * @param {string|null|undefined} opts.subject  WhatsApp group display name
+ * @param {string} [opts.individualFolder]
+ * @returns {{ folder: string, reason: string }}
  */
-export function mapSubjectToGroup(subject, groupMap = {}, fallbackGroup = "unmapped") {
-  const nSubject = normalize(subject);
-  if (!nSubject) {
+export function resolveBackupFolder({
+  isGroup,
+  subject,
+  individualFolder = INDIVIDUAL_FOLDER,
+} = {}) {
+  const individual = sanitizeFolderName(individualFolder) || INDIVIDUAL_FOLDER;
+
+  if (!isGroup) {
     return {
-      group: fallbackGroup,
-      reason: "empty group subject — using fallback",
+      folder: individual,
+      reason: "1:1 chat — using individual folder",
     };
   }
 
-  for (const [group, rules] of Object.entries(groupMap)) {
-    const names = [
-      ...(rules.matchNames || []),
-      ...(rules.matchSubjects || []),
-      group,
-    ].map(normalize);
-
-    for (const alias of names) {
-      if (!alias) continue;
-      if (nSubject === alias || nSubject.includes(alias) || alias.includes(nSubject)) {
-        return {
-          group,
-          reason: `subject "${subject}" matched group "${group}" (alias "${alias}")`,
-        };
-      }
-    }
+  const folder = sanitizeFolderName(subject);
+  if (!folder) {
+    return {
+      folder: individual,
+      reason: "empty or unsanitizable group subject — using individual folder",
+    };
   }
 
   return {
-    group: fallbackGroup,
-    reason: `subject "${subject}" unmatched — using fallback "${fallbackGroup}"`,
+    folder,
+    reason: `group subject "${subject}" → folder "${folder}"`,
   };
 }
 
-export function listKnownGroups(groupMap = {}) {
-  return Object.keys(groupMap);
+/** @deprecated Use resolveBackupFolder. Kept name for call-site clarity in logs. */
+export function mapSubjectToFolder(subject, individualFolder = INDIVIDUAL_FOLDER) {
+  return resolveBackupFolder({
+    isGroup: true,
+    subject,
+    individualFolder,
+  });
 }
