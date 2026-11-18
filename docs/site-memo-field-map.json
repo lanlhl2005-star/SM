@@ -1,0 +1,214 @@
+{
+  "document_type": "site_memo",
+  "project_code": "LK-P01043",
+  "template_doc": "docs/site-memo-template.doc",
+  "letterhead_asset": "docs/site-memo-assets/lap-kei-letterhead.png",
+  "letterhead_policy": "Reuse heading image extracted from the five sample docs; do not invent a separate master file.",
+  "output_format": "doc",
+  "preferences_ref": "Project store preferences.md",
+  "naming": {
+    "filename_pattern": "Site_Memo_{party_code}-{project_code}-SM-{memo_seq}.doc",
+    "filename_example_from_samples": "Site_Memo_LK-P01043-SM-001.doc",
+    "next_example_after_samples": "Site_Memo_LK-P01043-SM-006.doc",
+    "our_ref_line_pattern": "{party_code}/{project_code}/SM/",
+    "our_ref_number_line_pattern": "{memo_seq}",
+    "revision_suffix": false,
+    "revision_policy": "Always bump a new SM-xxx. Do not use Rn suffixes.",
+    "date_format": "DD/MM/YYYY",
+    "sample_party_code": "LK",
+    "sample_project_code": "P01043"
+  },
+  "table_border_styling": {
+    "source_sample": "Project store docs/sample-memos/Site_Memo_LK-P01043-SM-005.doc",
+    "photo_table_prototype": {
+      "clone_per_photo_block": true,
+      "rows": 2,
+      "columns": 1,
+      "border_style": "Single",
+      "line_width": 0.5,
+      "row0": "{{photo_block.image}} → replaced with image at generate time",
+      "row1": "{{photo_block.caption}} → replaced with plain editable caption text"
+    }
+  },
+  "never_change_boilerplate": [
+    {
+      "key": "letterhead",
+      "description": "Lap Kei letterhead banner from samples",
+      "source": "docs/site-memo-assets/lap-kei-letterhead.png"
+    },
+    { "key": "title", "value": "Site Memo" },
+    { "key": "label_from_en", "value": "From" },
+    { "key": "label_from_zh", "value": "由" },
+    { "key": "label_to_en", "value": "To" },
+    { "key": "label_to_zh", "value": "致" },
+    { "key": "label_date_en", "value": "Date" },
+    { "key": "label_date_zh", "value": "日期" },
+    { "key": "label_company_en", "value": "Company" },
+    { "key": "label_company_zh", "value": "公司" },
+    { "key": "label_our_ref_en", "value": "Our Ref." },
+    { "key": "label_our_ref_zh", "value": "編號" },
+    { "key": "label_copy_to_en", "value": "Copy to" },
+    { "key": "label_copy_to_zh", "value": "副本致" },
+    { "key": "label_project", "value": "Project:" },
+    { "key": "label_subject", "value": "Subject:" },
+    { "key": "closing_yours_faithfully", "value": "Yours faithfully," },
+    { "key": "closing_for_and_on_behalf", "value": "For and on behalf of" },
+    { "key": "closing_company", "value": "Lap Kei Engineering Co., Ltd." },
+    {
+      "key": "section_order",
+      "value": [
+        "letterhead",
+        "title",
+        "routing_header",
+        "project",
+        "subject",
+        "body",
+        "photo_blocks",
+        "closing",
+        "signatory_name",
+        "signatory_title",
+        "ref_initials"
+      ]
+    }
+  ],
+  "project_locked_defaults": {
+    "scope": "LK-P01043 only. Do not change in generated memos for this project. Another project may override when tooling is reused.",
+    "fields": [
+      {
+        "key": "from_name",
+        "value": "Mr. Howard Chan",
+        "in_template": "literal"
+      },
+      {
+        "key": "to_names",
+        "value": "Mr. Mr.Y.T. Huang /Benny Cheung",
+        "in_template": "literal",
+        "notes": "Fixed going forward for this project. SM-003 historically used a different To; do not vary per memo now."
+      },
+      {
+        "key": "company",
+        "value": "Huawei International Co. Limited",
+        "in_template": "literal"
+      },
+      {
+        "key": "our_ref_prefix",
+        "value": "LK/P01043/SM/",
+        "in_template": "literal"
+      },
+      {
+        "key": "project_title",
+        "value": "Framework Procurement Project For Phase 2 Expansion of The Second Data Center In GUANGDONG-Hong Kong- Macao Greater Bay Area (Hong Kong )",
+        "in_template": "literal"
+      },
+      {
+        "key": "signatory_name",
+        "value": "KS Ho",
+        "in_template": "literal"
+      },
+      {
+        "key": "signatory_title",
+        "value": "Senior Technical Manager",
+        "in_template": "literal"
+      },
+      {
+        "key": "ref_initials",
+        "value": "KS/hc/yc",
+        "in_template": "literal"
+      }
+    ]
+  },
+  "per_memo_changeable": [
+    {
+      "key": "date",
+      "placeholder": "{{date}}",
+      "format": "DD/MM/YYYY",
+      "examples": ["09/11/2026", "04/11/2026", "12/11/2026"]
+    },
+    {
+      "key": "memo_number",
+      "placeholder": "{{memo_number}}",
+      "examples": ["001", "002", "003", "004", "005", "006"],
+      "notes": "Zero-padded sequence only. No Rn. Next after samples: 006."
+    },
+    {
+      "key": "copy_to",
+      "placeholder": null,
+      "default": "",
+      "in_template": "empty_editable_field",
+      "notes": "Leave present and empty; may be filled by human or automation."
+    },
+    {
+      "key": "subject",
+      "placeholder": "{{subject}}"
+    },
+    {
+      "key": "body_intro",
+      "placeholder": "{{body_intro}}"
+    },
+    {
+      "key": "body_items",
+      "placeholders_in_template": ["{{body_bullet_1}}", "{{body_bullet_2}}"],
+      "structure": {
+        "item_number": "optional integer when using 1) 2) style",
+        "item_text": "string",
+        "reason": "optional; prefix with Reason: when used",
+        "bullets": "optional list (SM-005 style in blank template)"
+      }
+    },
+    {
+      "key": "photo_blocks",
+      "type": "array",
+      "looping_unit": true,
+      "description": "Generate-time loop only (not a Word for-loop). Length N → emit N bordered photo+caption tables by cloning the template prototype.",
+      "prototype_placeholders_in_template": {
+        "image": "{{photo_block.image}}",
+        "caption": "{{photo_block.caption}}"
+      },
+      "item_schema": {
+        "image": {
+          "type": "image_ref",
+          "required": true,
+          "notes": "Default: one image per block (SM-005)."
+        },
+        "caption": {
+          "type": "string",
+          "required": true,
+          "editable_in_doc": true,
+          "notes": "Written as plain Word text; human-editable after generation."
+        },
+        "images": {
+          "type": "array",
+          "required": false,
+          "notes": "Optional multi-image-under-one-caption extension evidenced in SM-001–003; not the blank-template default."
+        }
+      },
+      "generation_rules": [
+        "Read photo_blocks length N from the memo assignment.",
+        "Clone the single prototype table in site-memo-template.doc N times (remove prototype if N=0).",
+        "Each clone: 1 column × 2 rows; borders Single / 0.5; row0=image, row1=plain caption text.",
+        "Do not lock captions or protect the document."
+      ],
+      "caption_examples": [
+        "Photo of Steel stair",
+        "Pipe Routing Layout of condensing water pipe",
+        "Site Photo",
+        "Location Plan of Low Wall",
+        "Photo of Light Fitting and trunking clash with new installation",
+        "Location Plan – Relocation of 700mm diameter condensing Pipe Requested",
+        "Photo of 14/F Chiller Plant",
+        "Photo of R/F Cooling Tower Area (Low Zone)",
+        "Typical 4/F to 7/F Data Hall Corridor",
+        "Reserving Temporary Storage Area at L1",
+        "Delivery Note"
+      ]
+    }
+  ],
+  "editability_rules": [
+    "Output unlocked .doc (not .docx for this project; not PDF-only).",
+    "Use plain {{placeholders}} for per-memo fields; project-locked defaults as literals.",
+    "Use photo_blocks[] length to drive how many photo border tables are generated.",
+    "Do not lock content controls or restrict editing.",
+    "Humans must be able to edit all text (including captions) and replace photos after generation.",
+    "Match SM-005 photo table borders: Single / 0.5."
+  ]
+}
