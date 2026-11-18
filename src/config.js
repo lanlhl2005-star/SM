@@ -37,12 +37,33 @@ function truthy(v) {
   return ["1", "true", "yes", "on"].includes(String(v).toLowerCase());
 }
 
+function expandWindowsEnv(input) {
+  if (!input) return input;
+  return String(input).replace(/%([^%]+)%/g, (_, name) => {
+    const v = process.env[name];
+    return v !== undefined ? v : `%${name}%`;
+  });
+}
+
 const useMock =
   truthy(process.env.USE_MOCK) ||
-  (!process.env.PHOTO_BACKUP_ROOT && !process.env.SITE_MEMO_ROOT && !fs.existsSync(defaults.paths.siteMemoRoot));
+  (!process.env.PHOTO_BACKUP_ROOT &&
+    !process.env.SITE_MEMO_ROOT &&
+    !fs.existsSync(defaults.paths.siteMemoRoot));
 
 const mockPhotoRoot = path.join(ROOT, "mock", "Group_photo_backup");
 const mockSiteMemoRoot = path.join(ROOT, "mock", "Site Memo");
+const mockWaDesktopRoot = path.join(ROOT, "mock", "WhatsAppDesktop", "media");
+
+const waDefaults = defaults.whatsappDesktop || {};
+
+function resolveWaDesktopMediaRoot() {
+  if (process.env.WA_DESKTOP_MEDIA_ROOT) {
+    return expandWindowsEnv(process.env.WA_DESKTOP_MEDIA_ROOT);
+  }
+  if (useMock) return mockWaDesktopRoot;
+  return expandWindowsEnv(waDefaults.mediaRootHint || "");
+}
 
 export const config = {
   root: ROOT,
@@ -64,8 +85,36 @@ export const config = {
   host: process.env.HOST || defaults.server.host,
   port: Number(process.env.PORT || defaults.server.port),
   templateDoc: path.join(ROOT, "docs", "site-memo-template.doc"),
-  letterhead: path.join(ROOT, "docs", "site-memo-assets", "lap-kei-letterhead.png"),
+  letterhead: path.join(
+    ROOT,
+    "docs",
+    "site-memo-assets",
+    "lap-kei-letterhead.png"
+  ),
   fieldMap: path.join(ROOT, "docs", "site-memo-field-map.json"),
+  whatsappDesktop: {
+    mediaRoot: resolveWaDesktopMediaRoot(),
+    mediaRootHint: waDefaults.mediaRootHint,
+    pollIntervalMs: Number(
+      process.env.WA_WATCH_POLL_MS || waDefaults.pollIntervalMs || 5000
+    ),
+    stableMs: Number(process.env.WA_WATCH_STABLE_MS || waDefaults.stableMs || 1500),
+    fallbackGroup: process.env.WA_FALLBACK_GROUP || waDefaults.fallbackGroup || "unmapped",
+    imageExtensions: waDefaults.imageExtensions || [
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".gif",
+      ".bmp",
+      ".webp",
+      ".tif",
+      ".tiff",
+    ],
+    groupMap: waDefaults.groupMap || {},
+    stateFile: process.env.WA_WATCH_STATE_FILE
+      ? expandWindowsEnv(process.env.WA_WATCH_STATE_FILE)
+      : path.join(ROOT, ".backup-watch-state.json"),
+  },
 };
 
 export function siteMemoPhotoRoot() {

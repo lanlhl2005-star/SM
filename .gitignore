@@ -13,3 +13,11 @@ build/
 
 # Generated Drafts under mock Site Memo (keep seed Submitted folders)
 mock/Site Memo/SM-* (Draft)/
+
+# WhatsApp Desktop backup watcher local state + mock copies it may create
+.backup-watch-state.json
+.backup-watch-state.json.tmp
+mock/Group_photo_backup/unmapped/
+mock/Group_photo_backup/material-delivery/
+mock/Group_photo_backup/internal/
+mock/Group_photo_backup/bim-coordination/
