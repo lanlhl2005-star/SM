@@ -109,7 +109,7 @@ npm run backup-watch:once
 
 ## Mock / cloud testing
 
-With `USE_MOCK=true` (default `.env`) and no `WA_DESKTOP_MEDIA_ROOT`:
+With `USE_MOCK=true` (explicit) and no `WA_DESKTOP_MEDIA_ROOT`:
 
 ```text
 mock/WhatsAppDesktop/media/     ← watched source

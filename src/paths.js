@@ -52,9 +52,31 @@ export function defaultPhotoGroup(groups = listPhotoGroups()) {
   return groups[0] || null;
 }
 
+function looksLikeUnc(p) {
+  const s = String(p || "");
+  return s.startsWith("\\\\") || s.startsWith("//");
+}
+
 export function ensureRoots() {
-  fs.mkdirSync(photoBackupRootPath(), { recursive: true });
-  fs.mkdirSync(config.siteMemoRoot, { recursive: true });
+  // On non-Windows, Node treats \\Server\Share\... as a local relative path and
+  // would mkdir junk under the repo. Skip creating live UNC roots off Windows.
+  if (
+    process.platform !== "win32" &&
+    !config.useMock &&
+    (looksLikeUnc(config.photoBackupRoot) || looksLikeUnc(config.siteMemoRoot))
+  ) {
+    return;
+  }
+  try {
+    fs.mkdirSync(photoBackupRootPath(), { recursive: true });
+    fs.mkdirSync(config.siteMemoRoot, { recursive: true });
+  } catch (err) {
+    if (config.useMock) throw err;
+    console.warn(
+      `ensureRoots: could not create live roots (${err.message}). ` +
+        "Check the share is reachable, or set USE_MOCK=true for offline smoke."
+    );
+  }
 }
 
 /** Top-level folders under Group_photo_backup (real group subjects + individual). */

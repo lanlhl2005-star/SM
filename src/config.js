@@ -6,9 +6,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 function loadDotEnv() {
-  const envPath = path.join(ROOT, ".env");
-  if (!fs.existsSync(envPath)) return;
-  const text = fs.readFileSync(envPath, "utf8");
+  const dotenvPath = path.join(ROOT, ".env");
+  if (!fs.existsSync(dotenvPath)) return;
+  const text = fs.readFileSync(dotenvPath, "utf8");
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -45,20 +45,13 @@ function expandWindowsEnv(input) {
   });
 }
 
-function falsy(v) {
-  if (v === undefined || v === null || v === "") return false;
-  return ["0", "false", "no", "off"].includes(String(v).toLowerCase());
-}
+const envPath = path.join(ROOT, ".env");
+export const envFileExists = fs.existsSync(envPath);
 
-// USE_MOCK=false always means live paths (even if UNC is unreachable here).
-// Auto-mock only when USE_MOCK is unset/empty and no backup/memo root is configured
-// or reachable — so cloud agents fall back to fixtures without blocking Windows live use.
-const useMock = falsy(process.env.USE_MOCK)
-  ? false
-  : truthy(process.env.USE_MOCK) ||
-    (!process.env.PHOTO_BACKUP_ROOT &&
-      !process.env.SITE_MEMO_ROOT &&
-      !fs.existsSync(defaults.paths.siteMemoRoot));
+// Mock ONLY when USE_MOCK is explicitly truthy. Unset / false → live UNC from
+// config/default.json (or PHOTO_* / SITE_* env overrides). No auto-fallback when
+// the share is invisible from this machine (cloud agents must set USE_MOCK=true).
+const useMock = truthy(process.env.USE_MOCK);
 
 const mockPhotoRoot = path.join(ROOT, "mock", "Group_photo_backup");
 const mockSiteMemoRoot = path.join(ROOT, "mock", "Site Memo");

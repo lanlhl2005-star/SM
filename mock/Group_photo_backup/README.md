@@ -11,4 +11,4 @@ individual/YYYY-MM-DD/<photos>
 - `LK Site Memo Sample/` — second group folder to exercise group picker
 - `individual/` — 1:1 chat sample
 
-With `USE_MOCK=true`, Draft UI lists these top-level folders. On Windows with the live share, set `USE_MOCK=false`.
+With `USE_MOCK=true` (explicit), Draft UI lists these top-level folders. Default / `USE_MOCK=false` is LIVE UNC from `config/default.json`.

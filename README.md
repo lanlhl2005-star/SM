@@ -43,7 +43,7 @@ Details: [docs/whatsapp-desktop-backup-watch.md](docs/whatsapp-desktop-backup-wa
 
 ### Point at the live shares
 
-Edit `.env` (or set environment variables). **`USE_MOCK=false` is required** on the Windows PC so the Draft UI reads the live backup root (not coloured mock samples). UNC works when the share is reachable; a mapped drive letter also works:
+Edit `.env` (or set environment variables). Default is **LIVE** (`USE_MOCK` unset or `false`) using the UNC roots in `config/default.json`. Keep `USE_MOCK=false` in `.env` on the Windows PC so Draft UI shows real WhatsApp backups (not coloured mock samples). UNC works when the share is reachable; a mapped drive letter also works:
 
 ```env
 USE_MOCK=false
@@ -65,7 +65,7 @@ Requires **Node.js 20.9+**.
 
 ## Mock / cloud fallback
 
-When `USE_MOCK=true` (default in the shipped `.env.example`) — or when `USE_MOCK` is unset and no live roots are configured/reachable — the app uses repo fixtures:
+Mock is **opt-in only**: set `USE_MOCK=true` explicitly (offline / cloud smoke). Unset or `false` always uses live UNC from `config/default.json` (or `PHOTO_*` / `SITE_*` overrides) — no auto-fallback when the share is invisible from this machine.
 
 ```text
 mock/Group_photo_backup/<group>/YYYY-MM-DD/   ← group = subject folder or individual
@@ -73,9 +73,9 @@ mock/Site Memo/                               ← Draft folders written here
 mock/WhatsAppDesktop/media/                   ← backup-watch source in mock mode
 ```
 
-`USE_MOCK=false` never auto-falls back to mock, even if the UNC path is unreachable from this machine.
+If `.env` is missing, `npm start` logs a loud warning and still defaults to LIVE.
 
-Smoke-test without the UI:
+Smoke-test without the UI (scripts set `USE_MOCK=true`):
 
 ```bat
 npm run smoke

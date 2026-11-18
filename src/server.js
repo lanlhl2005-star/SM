@@ -2,7 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config } from "./config.js";
+import { config, envFileExists } from "./config.js";
 import { createDraftMemo } from "./create-draft.js";
 import { formatDocSeq, formatFolderNn, nextMemoSequence } from "./memo-number.js";
 import {
@@ -17,6 +17,19 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
+
+if (!envFileExists) {
+  console.warn("");
+  console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+  console.warn("  WARNING: no .env file found in the repo root.");
+  console.warn("  Default is LIVE (useMock=false) using config/default.json UNC.");
+  console.warn("  Mock fixtures are used ONLY when USE_MOCK=true is set.");
+  console.warn("  On Windows: copy .env.example to .env (USE_MOCK=false) and");
+  console.warn("  restart so Draft UI shows LIVE + the live Group_photo_backup.");
+  console.warn("  Offline/cloud smoke: set USE_MOCK=true explicitly.");
+  console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+  console.warn("");
+}
 
 ensureRoots();
 
@@ -135,9 +148,12 @@ app.get("/api/open-hint", (req, res) => {
 
 app.listen(config.port, config.host, () => {
   console.log(`Site Memo Draft UI  http://${config.host}:${config.port}`);
-  console.log(`  USE_MOCK=${config.useMock}`);
+  console.log(`  mode: ${config.useMock ? "MOCK" : "LIVE"} (USE_MOCK=${config.useMock})`);
   console.log(`  photos: ${config.photoBackupRoot}`);
   console.log(`  site memos: ${config.siteMemoRoot}`);
+  if (!envFileExists) {
+    console.warn("  .env: MISSING (default LIVE; mock only if USE_MOCK=true)");
+  }
   const groups = listPhotoGroups();
   console.log(
     `  groups: ${groups.length ? groups.join(", ") : "(none yet)"}` +
