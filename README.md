@@ -43,7 +43,24 @@ Details: [docs/whatsapp-desktop-backup-watch.md](docs/whatsapp-desktop-backup-wa
 
 ### Point at the live shares
 
-Edit `.env` (or set environment variables). Default is **LIVE** (`USE_MOCK` unset or `false`) using the UNC roots in `config/default.json`. Keep `USE_MOCK=false` in `.env` on the Windows PC so Draft UI shows real WhatsApp backups (not coloured mock samples). UNC works when the share is reachable; a mapped drive letter also works:
+Edit `.env` (or set environment variables). Default is **LIVE** (`USE_MOCK` unset or `false`) using the UNC roots in `config/default.json`. Keep `USE_MOCK=false` in `.env` on the Windows PC so Draft UI shows real WhatsApp backups (not coloured mock samples).
+
+**Prefer a mapped drive** (works on stock `C:\Program Files\nodejs` and every other Node build):
+
+```bat
+net use S: \\Server\Share
+```
+
+```env
+USE_MOCK=false
+SHARE_DRIVE=S:
+PHOTO_BACKUP_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup
+SITE_MEMO_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
+```
+
+If `PHOTO_*` / `SITE_*` still use `\\Server\Share\...`, the app rewrites them to `S:\...` when `SHARE_DRIVE=S:` is set or when `net use` already maps that share.
+
+Raw UNC also works on official nodejs.org builds when the share is reachable:
 
 ```env
 USE_MOCK=false
@@ -51,15 +68,7 @@ PHOTO_BACKUP_ROOT=\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\G
 SITE_MEMO_ROOT=\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
 ```
 
-Mapped-drive example:
-
-```env
-USE_MOCK=false
-PHOTO_BACKUP_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup
-SITE_MEMO_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
-```
-
-**Windows UNC note:** `npm start` / `wa-backup` / related scripts launch via `scripts/run-with-unc.mjs`, which sets `NODE_UNC_HOST_ALLOWLIST` from the UNC host in those roots (default `Server`). That avoids `ERR_UNC_HOST_NOT_ALLOWED` on Node builds that restrict UNC hosts (Electron/Cursor-patched). PowerShell can list the share even when a restricted Node cannot — restart after `git pull` so the wrapper is used. Optional manual override: `NODE_UNC_HOST_ALLOWLIST=Server` (backslash-separated for multiple hosts).
+**About `ERR_UNC_HOST_NOT_ALLOWED`:** that error is from **Electron/Cursor-patched** Node, not from official nodejs.org. `NODE_UNC_HOST_ALLOWLIST` is ignored by stock Node. If you see that error, map the share (above) — do not rely on the allowlist alone.
 
 Optional: set `PHOTO_GROUP` to a top-level folder name under `Group_photo_backup` (live WhatsApp group subject, or `individual`) to pre-select it in the UI. Leave unset to pick from the folder list.
 

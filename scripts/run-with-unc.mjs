@@ -3,9 +3,10 @@
  * Cross-platform launcher: set NODE_UNC_HOST_ALLOWLIST from config/.env UNC
  * roots, then spawn Node with the remaining argv.
  *
- * Why a child process? Some Windows Node builds (Electron/Cursor-patched)
- * read NODE_UNC_HOST_ALLOWLIST only at process start. Mutating process.env
- * after boot is not enough — the child must inherit the allowlist.
+ * Why a child process? Electron/Cursor-patched Node reads
+ * NODE_UNC_HOST_ALLOWLIST only at process start. Official nodejs.org builds
+ * ignore this env (no ERR_UNC_HOST_NOT_ALLOWED there) — for stock Node prefer
+ * mapped drives via SHARE_DRIVE / src/unc-mapped-drive.js in config.
  *
  * Usage (via package.json):
  *   node scripts/run-with-unc.mjs src/server.js

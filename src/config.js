@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowUncHostsForPaths } from "./unc-allowlist.js";
+import { preferMappedDrivePath } from "./unc-mapped-drive.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -75,21 +76,39 @@ function resolveMaybeRelative(p, fallback) {
   return path.isAbsolute(value) ? value : path.resolve(ROOT, value);
 }
 
-const photoBackupRoot = process.env.PHOTO_BACKUP_ROOT
+const photoBackupRootRaw = process.env.PHOTO_BACKUP_ROOT
   ? process.env.PHOTO_BACKUP_ROOT
   : useMock
     ? mockPhotoRoot
     : defaults.paths.photoBackupRoot;
-const siteMemoRoot = process.env.SITE_MEMO_ROOT
+const siteMemoRootRaw = process.env.SITE_MEMO_ROOT
   ? process.env.SITE_MEMO_ROOT
   : useMock
     ? mockSiteMemoRoot
     : defaults.paths.siteMemoRoot;
 
-// Prime UNC allowlist before any photoBackupRoot / siteMemoRoot fs I/O.
-// Harmless on official Node builds; required for Electron/Cursor-patched Node
-// that throws ERR_UNC_HOST_NOT_ALLOWED for \\Server\... unless allowlisted.
-allowUncHostsForPaths([photoBackupRoot, siteMemoRoot]);
+// Prefer mapped drive letters over UNC. Official nodejs.org builds do NOT
+// implement NODE_UNC_HOST_ALLOWLIST; drive letters work on every Node build.
+const photoMapped = preferMappedDrivePath(photoBackupRootRaw);
+const siteMapped = preferMappedDrivePath(siteMemoRootRaw);
+const photoBackupRoot = photoMapped.path;
+const siteMemoRoot = siteMapped.path;
+
+/** @type {string[]} */
+export const uncPathRewrites = [];
+if (photoMapped.mapped && photoMapped.path !== photoBackupRootRaw) {
+  uncPathRewrites.push(`photos: ${photoBackupRootRaw} → ${photoMapped.path}`);
+}
+if (siteMapped.mapped && siteMapped.path !== siteMemoRootRaw) {
+  uncPathRewrites.push(`site memos: ${siteMemoRootRaw} → ${siteMapped.path}`);
+}
+export const uncMapSuggestion =
+  (!photoMapped.mapped && photoMapped.suggestion) ||
+  (!siteMapped.mapped && siteMapped.suggestion) ||
+  null;
+
+// Also prime Electron/Cursor UNC allowlist when that API exists (no-op on stock Node).
+allowUncHostsForPaths([photoBackupRootRaw, siteMemoRootRaw, photoBackupRoot, siteMemoRoot]);
 
 export const config = {
   root: ROOT,

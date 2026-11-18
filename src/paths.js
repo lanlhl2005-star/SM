@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
+import { uncMappedDriveHint } from "./unc-mapped-drive.js";
 
 const IMAGE_EXT = new Set([
   ".jpg",
@@ -94,9 +95,14 @@ export function ensureRoots() {
     fs.mkdirSync(config.siteMemoRoot, { recursive: true });
   } catch (err) {
     if (config.useMock) throw err;
+    const blocked =
+      err?.code === "ERR_UNC_HOST_NOT_ALLOWED" ||
+      /UNC host .* access is not allowed/i.test(String(err?.message || ""));
     console.warn(
       `ensureRoots: could not create live roots (${err.message}). ` +
-        "Check the share is reachable, or set USE_MOCK=true for offline smoke."
+        (blocked
+          ? uncMappedDriveHint(config.photoBackupRoot || config.siteMemoRoot)
+          : "Check the share is reachable, or set USE_MOCK=true for offline smoke.")
     );
   }
 }
@@ -138,7 +144,13 @@ function formatFsError(action, target, err) {
   const code = err?.code || err?.errno || "UNKNOWN";
   const errno = err?.errno != null ? ` errno=${err.errno}` : "";
   const msg = err?.message || String(err);
-  const wrapped = new Error(`${action} failed for ${target}: ${msg} [${code}${errno}]`);
+  const blocked =
+    err?.code === "ERR_UNC_HOST_NOT_ALLOWED" ||
+    /UNC host .* access is not allowed/i.test(msg);
+  const hint = blocked ? ` — ${uncMappedDriveHint(target)}` : "";
+  const wrapped = new Error(
+    `${action} failed for ${target}: ${msg} [${code}${errno}]${hint}`
+  );
   wrapped.code = err?.code;
   wrapped.errno = err?.errno;
   wrapped.path = target;

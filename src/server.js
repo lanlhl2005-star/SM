@@ -2,7 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, envFileExists } from "./config.js";
+import { config, envFileExists, uncMapSuggestion, uncPathRewrites } from "./config.js";
 import { createDraftMemo } from "./create-draft.js";
 import { formatDocSeq, formatFolderNn, nextMemoSequence } from "./memo-number.js";
 import {
@@ -163,6 +163,12 @@ app.listen(config.port, config.host, () => {
   console.log(`  mode: ${config.useMock ? "MOCK" : "LIVE"} (USE_MOCK=${config.useMock})`);
   console.log(`  photos: ${config.photoBackupRoot}`);
   console.log(`  site memos: ${config.siteMemoRoot}`);
+  for (const line of uncPathRewrites) {
+    console.log(`  [unc] ${line}`);
+  }
+  if (uncMapSuggestion && !config.useMock) {
+    console.warn(`  [unc] tip: ${uncMapSuggestion}`);
+  }
   if (!envFileExists) {
     console.warn("  .env: MISSING (default LIVE; mock only if USE_MOCK=true)");
   }
