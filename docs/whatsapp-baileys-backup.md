@@ -113,6 +113,24 @@ rmdir /s /q .wa-auth
 npm run wa-link
 ```
 
+### After updating the repo
+
+```bat
+git pull
+npm.cmd run wa-backup
+```
+
+Restart the daemon after every pull so it picks up code changes (auth under `.wa-auth\` is kept — no re-link needed unless WhatsApp logged the device out).
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `EXDEV: cross-device link not permitted` when saving to a UNC `PHOTO_BACKUP_ROOT` | Fixed in current tree: media is moved with rename, falling back to copy-then-unlink across devices. `git pull` and restart `npm.cmd run wa-backup`. |
+| Chinese path segments (e.g. `火炭`) look garbled in the console | Usually console code-page mojibake only. Paths are UTF-16 JS strings and are written correctly on the share — check Explorer, not the terminal glyphs. |
+
 ---
 
 ## What gets saved
