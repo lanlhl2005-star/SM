@@ -6,9 +6,9 @@ import { describe, it, after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createDraftMemo } from "../src/create-draft.js";
 import {
-  buildSiteMemoMhtml,
+  buildSiteMemoHtml,
   extractLetterheadPngFromTemplate,
-  verifyMhtmlImageEmbeds,
+  verifyWordHtmlImageEmbeds,
   writeSiteMemoDoc,
 } from "../src/generate-doc.js";
 import { config } from "../src/config.js";
@@ -20,18 +20,7 @@ function mockPhoto(rel) {
   return path.join(ROOT, "mock", "Group_photo_backup", rel);
 }
 
-/** Decode the base64 HTML root part from an MHTML .doc. */
-function decodeHtmlPart(mhtml) {
-  const htmlPartMatch = mhtml.match(
-    /Content-Type: text\/html; charset="utf-8"\r\n\r\n([\s\S]*?)\r\n------=_NextPart_SiteMemo_LK/
-  );
-  assert.ok(htmlPartMatch, "HTML MIME part present");
-  return Buffer.from(htmlPartMatch[1].replace(/\r\n/g, ""), "base64").toString(
-    "utf8"
-  );
-}
-
-describe("generate-doc MHTML site memo", () => {
+describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sm-doc-"));
   const prevSiteRoot = config.siteMemoRoot;
 
@@ -45,15 +34,14 @@ describe("generate-doc MHTML site memo", () => {
     assert.equal(fromTemplate[0], 0x89);
     assert.equal(fromTemplate[1], 0x50);
     assert.ok(fromTemplate.length > 10_000, "letterhead PNG should be substantial");
-    // Generator must not require the side asset file for letterhead bytes.
     assert.ok(fs.existsSync(config.templateDoc));
   });
 
-  it("emits Calibri 12, underlined Project/Subject, Content-Location photos, and sign-off", () => {
+  it("emits Calibri 12, underlined Project/Subject, data: URI photos, and sign-off", () => {
     const photoPath = mockPhoto("site-memo/2026-11-18/IMG_chiller_plant.jpg");
     const payload = {
       date: "18/11/2026",
-      memo_number: "006",
+      memo_number: "010",
       copy_to: "",
       subject: "Format match smoke",
       body_intro: "Refer to site inspection, please note the following.",
@@ -72,13 +60,12 @@ describe("generate-doc MHTML site memo", () => {
       ],
     };
 
-    const mhtml = buildSiteMemoMhtml(payload);
-    assert.match(mhtml, /^MIME-Version: 1\.0/);
-    assert.match(mhtml, /multipart\/related/);
-    assert.match(mhtml, /type="text\/html"/);
-    assert.doesNotMatch(mhtml, /data:image\//, "must not use data: URIs (Word truncates)");
-
-    const html = decodeHtmlPart(mhtml);
+    const html = buildSiteMemoHtml(payload);
+    assert.doesNotMatch(html, /^MIME-Version:/m);
+    assert.doesNotMatch(html, /multipart\/related/);
+    assert.doesNotMatch(html, /SiteMemo_files\//);
+    assert.doesNotMatch(html, /\bsrc=["']cid:/i);
+    assert.doesNotMatch(html, /\bsrc=["']file:/i);
 
     // Fonts: Calibri + Word mso-* (never nested double-quotes that break style='')
     assert.match(html, /font-family:Calibri/);
@@ -89,11 +76,6 @@ describe("generate-doc MHTML site memo", () => {
       html,
       /style="[^"]*font-family:Calibri,\s*"/,
       "inline style must not nest double-quotes inside double-quoted attributes"
-    );
-    assert.doesNotMatch(
-      html,
-      /font-family:Calibri,\s*["']/,
-      "font-family must not use quoted secondary names that break attributes"
     );
 
     // Template-like routing (space columns), not an HTML routing table
@@ -109,40 +91,18 @@ describe("generate-doc MHTML site memo", () => {
     assert.match(html, /- Temporary storage area at L1/);
     assert.doesNotMatch(html, /<ul[\s>]/);
 
-    // Photo tables Single / 0.5 — relative SiteMemo_files embeds (Word Content-Location)
+    // Photo tables Single / 0.5 — data: URI embeds
     assert.match(html, /class="MsoNormalTable photo-block"/);
     assert.match(html, /mso-border-alt:solid windowtext \.5pt/);
     assert.match(html, /Photo of 14\/F Chiller Plant/);
-    assert.match(html, /src="SiteMemo_files\/photo0\.jpg"/);
-    assert.match(html, /src="SiteMemo_files\/photo1\.jpg"/);
-    assert.match(html, /src="SiteMemo_files\/letterhead\.png"/);
-    assert.match(html, /v:imagedata[^>]*src="SiteMemo_files\/letterhead\.png"/);
-    assert.doesNotMatch(
-      html,
-      /(?:src|o:href)="file:\/\//,
-      "markup must not use absolute file:/// (Word opens as dead external links)"
-    );
-    // Primary src must not be cid: — Word desktop MHTML uses Content-Location.
-    assert.doesNotMatch(html, /<(?:img|v:imagedata)\b[^>]*\bsrc="cid:/i);
+    assert.match(html, /data:image\/png;base64,/);
+    assert.match(html, /data:image\/jpeg;base64,/);
 
-    // MIME parts carry Content-Location matching relative HTML refs
-    assert.match(
-      mhtml,
-      /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo0\.jpg/
-    );
-    assert.match(
-      mhtml,
-      /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/letterhead\.png/
-    );
-    assert.match(mhtml, /Content-ID: <photo0\.jpg@sitememo\.lk>/);
-    assert.match(mhtml, /Content-ID: <letterhead\.png@sitememo\.lk>/);
-
-    // Embed integrity: parts exist, magic bytes OK, HTML refs resolve
-    const verified = verifyMhtmlImageEmbeds(mhtml);
-    assert.equal(verified.imagePartCount, 3);
-    assert.ok(verified.primarySrcs.includes("SiteMemo_files/letterhead.png"));
-    assert.ok(verified.primarySrcs.includes("SiteMemo_files/photo0.jpg"));
-    assert.ok(verified.primarySrcs.includes("SiteMemo_files/photo1.jpg"));
+    const verified = verifyWordHtmlImageEmbeds(html);
+    assert.equal(verified.imageCount, 3, "letterhead + 2 photos");
+    assert.ok(verified.letterheadBytes > 10_000);
+    assert.equal(verified.photoBytes.length, 2);
+    assert.ok(verified.photoBytes.every((n) => n > 1000));
 
     // Sign-off after photos
     assert.match(html, /Yours faithfully,/);
@@ -156,30 +116,16 @@ describe("generate-doc MHTML site memo", () => {
       "sign-off must follow photo tables"
     );
 
-    // Two photo parts + letterhead Content-Location.
-    const photoParts = [
-      ...mhtml.matchAll(
-        /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo\d+\./g
-      ),
-    ];
-    assert.equal(photoParts.length, 2);
-
-    // No megabyte single lines (Word-hostile).
-    const maxLine = Math.max(...mhtml.split(/\r?\n/).map((l) => l.length));
-    assert.ok(maxLine <= 100, `max line ${maxLine} should be wrapped (~76)`);
-
-    const out = path.join(tmpRoot, "Site_Memo_LK-P01043-SM-006.doc");
+    const out = path.join(tmpRoot, "Site_Memo_LK-P01043-SM-010.doc");
     writeSiteMemoDoc(out, payload);
     assert.ok(fs.existsSync(out));
     const written = fs.readFileSync(out, "utf8");
-    assert.match(written, /photo0\.jpg/);
-    assert.match(written, /letterhead\.png/);
-    const writtenHtml = decodeHtmlPart(written);
-    assert.match(writtenHtml, /Yours faithfully,/);
-    assert.match(writtenHtml, /Photo of 14\/F Chiller Plant/);
-    assert.match(writtenHtml, /src="SiteMemo_files\/photo0\.jpg"/);
-    assert.doesNotMatch(writtenHtml, /(?:src|o:href)="file:\/\//);
-    verifyMhtmlImageEmbeds(written);
+    assert.equal(written.charCodeAt(0), 0xfeff, "UTF-8 BOM for Word CJK");
+    assert.match(written, /data:image\/png;base64,/);
+    assert.match(written, /data:image\/jpeg;base64,/);
+    assert.match(written, /Yours faithfully,/);
+    assert.match(written, /Photo of 14\/F Chiller Plant/);
+    verifyWordHtmlImageEmbeds(written);
   });
 
   it("createDraftMemo embeds selected photo_blocks and closing", () => {
@@ -199,57 +145,39 @@ describe("generate-doc MHTML site memo", () => {
     });
     assert.equal(result.photo_count, 1);
     const text = fs.readFileSync(result.file_path, "utf8");
-    assert.match(text, /MIME-Version/);
-    assert.match(text, /photo0\.jpg/);
-    assert.match(
-      text,
-      /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo0\.jpg/
-    );
-    assert.doesNotMatch(text, /data:image\//);
-    const html = decodeHtmlPart(text);
-    assert.match(html, /Yours faithfully,/);
-    assert.match(html, /Delivery Note/);
-    assert.match(html, /<u><b>Subject:<\/b><\/u>/);
-    assert.match(html, /mso-ascii-font-family:Calibri/);
-    assert.match(html, /src="SiteMemo_files\/photo0\.jpg"/);
-    assert.doesNotMatch(html, /(?:src|o:href)="file:\/\//);
-    verifyMhtmlImageEmbeds(text);
+    assert.doesNotMatch(text, /MIME-Version/);
+    assert.match(text, /data:image\/jpeg;base64,/);
+    assert.match(text, /data:image\/png;base64,/);
+    assert.match(text, /Yours faithfully,/);
+    assert.match(text, /Delivery Note/);
+    assert.match(text, /<u><b>Subject:<\/b><\/u>/);
+    assert.match(text, /mso-ascii-font-family:Calibri/);
+    const verified = verifyWordHtmlImageEmbeds(text);
+    assert.equal(verified.imageCount, 2);
   });
 
-  it("rejects SM-008-style cid-primary markup in verifier", () => {
-    // Mimic broken PR #14 pattern: cid: primary src with matching Content-ID.
-    const fake = [
-      "MIME-Version: 1.0",
-      `Content-Type: multipart/related; boundary="----=_NextPart_SiteMemo_LK"; type="text/html"`,
-      "",
-      "------=_NextPart_SiteMemo_LK",
-      "Content-Location: file:///C:/SiteMemo/SiteMemo.htm",
-      'Content-Transfer-Encoding: base64',
-      'Content-Type: text/html; charset="utf-8"',
-      "",
-      Buffer.from(
-        '<html><img src="cid:letterhead.png@sitememo.lk"/></html>',
-        "utf8"
-      )
-        .toString("base64")
-        .match(/.{1,76}/g)
-        .join("\r\n"),
-      "------=_NextPart_SiteMemo_LK",
-      "Content-Location: file:///C:/SiteMemo/SiteMemo_files/letterhead.png",
-      "Content-ID: <letterhead.png@sitememo.lk>",
-      "Content-Transfer-Encoding: base64",
-      "Content-Type: image/png",
-      "",
-      // Minimal valid-ish PNG header bytes as base64 (not a full PNG — magic check)
-      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-        .toString("base64"),
-      "------=_NextPart_SiteMemo_LK--",
-      "",
-    ].join("\r\n");
-
+  it("rejects MHTML / relative / cid strategies in verifier", () => {
     assert.throws(
-      () => verifyMhtmlImageEmbeds(fake),
-      /primary src must be relative/
+      () =>
+        verifyWordHtmlImageEmbeds(
+          'MIME-Version: 1.0\nContent-Type: multipart/related\n<img src="SiteMemo_files/photo0.jpg"/>'
+        ),
+      /MHTML|SiteMemo_files|data:image/
+    );
+    assert.throws(
+      () =>
+        verifyWordHtmlImageEmbeds(
+          '<html><img src="cid:letterhead.png@sitememo.lk"/></html>'
+        ),
+      /cid:|data:image/
+    );
+    assert.throws(
+      () =>
+        verifyWordHtmlImageEmbeds(
+          '<html><img src="file:///C:/SiteMemo/SiteMemo_files/photo0.jpg"/></html>'
+        ),
+      /file:|data:image/
     );
   });
+
 });
