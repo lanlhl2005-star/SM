@@ -2,6 +2,10 @@
 /**
  * WhatsApp Desktop media → Group_photo_backup watcher.
  *
+ * OPTIONAL / DEPRECATED fallback. Prefer Baileys linked-device backup:
+ *   npm run wa-link && npm run wa-backup
+ * See docs/whatsapp-baileys-backup.md
+ *
  * Watches the Desktop media cache (or mock/), copies new images into
  * PHOTO_BACKUP_ROOT\<group>\YYYY-MM-DD\. No WhatsApp send.
  *
@@ -34,7 +38,10 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`WhatsApp Desktop photo backup watcher
+  console.log(`WhatsApp Desktop photo backup watcher (OPTIONAL / DEPRECATED)
+
+Prefer: npm run wa-link && npm run wa-backup
+  (Baileys linked device — see docs/whatsapp-baileys-backup.md)
 
 Copies new images from the Desktop media cache into:
   <PHOTO_BACKUP_ROOT>\\<group>\\YYYY-MM-DD\\

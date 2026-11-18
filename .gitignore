@@ -21,3 +21,15 @@ mock/Group_photo_backup/unmapped/
 mock/Group_photo_backup/material-delivery/
 mock/Group_photo_backup/internal/
 mock/Group_photo_backup/bim-coordination/
+
+# Baileys linked-device auth / secrets / runtime (NEVER commit)
+.wa-auth/
+.wa-backup-state.json
+.wa-backup-state.json.tmp
+.wa-backup-heartbeat.json
+.wa-backup-tmp/
+auth/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
