@@ -18,6 +18,7 @@ mock/Site Memo/SM-* (Draft)/
 .backup-watch-state.json
 .backup-watch-state.json.tmp
 mock/Group_photo_backup/unmapped/
+mock/Group_photo_backup/individual/
 mock/Group_photo_backup/material-delivery/
 mock/Group_photo_backup/internal/
 mock/Group_photo_backup/bim-coordination/

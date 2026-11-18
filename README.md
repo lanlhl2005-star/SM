@@ -2,7 +2,7 @@
 
 Local web UI for **LK-P01043** site memos: browse WhatsApp group photo backups, group photos into ordered `photo_blocks` with captions, fill date/subject/body, and write an unlocked editable **Draft** `.doc` under the Site Memo share.
 
-**Primary photo intake:** Baileys **linked-device** backup (`npm run wa-link` / `npm run wa-backup`) saves incoming group photos into `Group_photo_backup\<group>\YYYY-MM-DD\` without disturbing phone or Desktop daily use. The older Desktop media-cache watcher is optional/deprecated. Send-to-WhatsApp is **out of scope** (on hold).
+**Primary photo intake:** Baileys **linked-device** backup (`npm run wa-link` / `npm run wa-backup`) saves incoming group photos into `Group_photo_backup\<WhatsApp group name>\YYYY-MM-DD\` (1:1 chats → `individual\YYYY-MM-DD\`) without disturbing phone or Desktop daily use. The older Desktop media-cache watcher is optional/deprecated. Send-to-WhatsApp is **out of scope** (on hold).
 
 ## Quick start (Windows colleagues)
 
@@ -26,7 +26,7 @@ npm run wa-backup
 ```
 
 - `wa-link` — scan QR once (or `npm run wa-link -- --phone 852…`); credentials under `.wa-auth\` (**gitignored**, never commit).
-- `wa-backup` — daemon; incoming photos → `PHOTO_BACKUP_ROOT\<group>\YYYY-MM-DD\`.
+- `wa-backup` — daemon; incoming photos → `PHOTO_BACKUP_ROOT\<group subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\`).
 
 Full steps, Task Scheduler tips, and safety rules: [docs/whatsapp-baileys-backup.md](docs/whatsapp-baileys-backup.md).
 
@@ -83,7 +83,7 @@ npm test
 
 ## UI flow
 
-1. Choose a **day folder** under `…\Group_photo_backup\site-memo\YYYY-MM-DD\`.
+1. Choose a **day folder** under `…\Group_photo_backup\<site-memo group name>\YYYY-MM-DD\` (set `PHOTO_GROUP` to that folder name).
 2. Click photos to build ordered **photo blocks** (1 image + 1 editable caption each).
 3. Fill **date**, **subject**, body intro/bullets; leave **Copy to** empty unless needed.
 4. **Create Draft .doc** → writes only:
@@ -106,10 +106,10 @@ The program **never** creates `(Submitted)` folders. After Word review, a human 
 
 ## Server paths (live)
 
-**Photo backup (browse):**
+**Photo backup (browse):** folder name = WhatsApp group subject (not a fixed `site-memo` alias). Example:
 
 ```text
-\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\site-memo\YYYY-MM-DD\
+\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\<group subject>\YYYY-MM-DD\
 ```
 
 **Site Memo store (write Draft only):**

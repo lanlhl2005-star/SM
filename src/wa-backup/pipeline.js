@@ -8,7 +8,7 @@ import {
   messageTs,
   shouldSaveMediaKind,
 } from "./media.js";
-import { mapSubjectToGroup } from "./group-map.js";
+import { resolveBackupFolder } from "./group-map.js";
 import {
   dayFolderFromTs,
   extensionFromMeta,
@@ -22,7 +22,8 @@ import { getProcessed, markProcessed, saveState } from "./state.js";
 import { touchHeartbeat } from "./heartbeat.js";
 
 /**
- * Incoming media → PHOTO_BACKUP_ROOT\<group>\YYYY-MM-DD\<file>
+ * Incoming media → PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\<file>
+ * Group folder = live WhatsApp subject (sanitized); 1:1 → individual.
  * Incoming only; never sends. Patterns adapted from whatsapp-media-saver.
  */
 export function createPipeline({
@@ -112,18 +113,17 @@ export function createPipeline({
       mediaType: classified.kind,
     });
 
-    let groupFolder = baileysCfg.fallbackGroup || "unmapped";
-    let mapReason = "1:1 chat — using fallback group folder";
+    let subject = null;
     if (isGroup) {
-      const subject = await refreshGroupName(chatId);
-      const mapped = mapSubjectToGroup(
-        subject,
-        baileysCfg.groupMap,
-        baileysCfg.fallbackGroup || "unmapped"
-      );
-      groupFolder = mapped.group;
-      mapReason = mapped.reason;
+      subject = await refreshGroupName(chatId);
     }
+    const mapped = resolveBackupFolder({
+      isGroup,
+      subject,
+      individualFolder: baileysCfg.individualFolder || "individual",
+    });
+    const groupFolder = mapped.folder;
+    const mapReason = mapped.reason;
 
     const day = dayFolderFromTs(ts, baileysCfg.timezone || "Asia/Hong_Kong");
     const destDir = ensureDestDir(groupFolder, day);

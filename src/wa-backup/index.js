@@ -3,7 +3,8 @@
  * Baileys linked-device WhatsApp photo backup for Site Memo.
  *
  * Primary path: link once on a Windows PC, then run the daemon.
- * Saves incoming photos into PHOTO_BACKUP_ROOT\<group>\YYYY-MM-DD\.
+ * Saves incoming photos into PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\.
+ * Group folders use the live WhatsApp group subject (sanitized); 1:1 → individual.
  * Does NOT send messages. Phone stays primary; Desktop daily use undisturbed.
  *
  * Patterns adapted from https://github.com/lanlhl2005-star/whatsapp-media-saver
@@ -20,7 +21,7 @@ import { logger } from "./logger.js";
 import { DEFAULT_LINK_TIMEOUT_MS, parseLinkArgs } from "./link-args.js";
 import { checkHeartbeat, touchHeartbeat } from "./heartbeat.js";
 import { loadState, saveState } from "./state.js";
-import { listKnownGroups } from "./group-map.js";
+import { INDIVIDUAL_FOLDER } from "./group-map.js";
 import {
   createSocket,
   DisconnectReason,
@@ -56,9 +57,8 @@ Link options:
   --timeout-ms <n>         Max wait for first open (default ${DEFAULT_LINK_TIMEOUT_MS})
 
 Layout:
-  <PHOTO_BACKUP_ROOT>\\<group>\\YYYY-MM-DD\\<file>
-  Known groups: ${listKnownGroups(b.groupMap).join(", ") || "(none)"}
-  Fallback: ${b.fallbackGroup}
+  <PHOTO_BACKUP_ROOT>\\<WhatsApp group subject>\\YYYY-MM-DD\\<file>
+  1:1 chats → <PHOTO_BACKUP_ROOT>\\${b.individualFolder || INDIVIDUAL_FOLDER}\\YYYY-MM-DD\\
 
 Safety:
   Linked-device only — phone stays primary; Desktop daily use undisturbed.
@@ -71,12 +71,11 @@ Safety:
 function ensureBackupRoots() {
   const b = baileys();
   fs.mkdirSync(config.photoBackupRoot, { recursive: true });
-  for (const g of [
-    ...listKnownGroups(b.groupMap),
-    b.fallbackGroup || "unmapped",
-  ]) {
-    fs.mkdirSync(path.join(config.photoBackupRoot, g), { recursive: true });
-  }
+  // Group subject folders are created on demand; pre-create individual only.
+  const individual = b.individualFolder || INDIVIDUAL_FOLDER;
+  fs.mkdirSync(path.join(config.photoBackupRoot, individual), {
+    recursive: true,
+  });
 }
 
 function ensureTmpDir() {
@@ -292,8 +291,9 @@ async function cmdRun() {
   logger.info(`  USE_MOCK=${config.useMock}`);
   logger.info(`  backup: ${config.photoBackupRoot}`);
   logger.info(`  auth:   ${b.authDir}`);
-  logger.info(`  groups: ${listKnownGroups(b.groupMap).join(", ")}`);
-  logger.info(`  fallback: ${b.fallbackGroup}`);
+  logger.info(
+    `  folders: <group subject>/YYYY-MM-DD/ or ${b.individualFolder || INDIVIDUAL_FOLDER}/YYYY-MM-DD/`
+  );
   logger.info(`  mediaTypes: ${(b.mediaTypes || ["image"]).join(", ")}`);
   logger.info("  (linked-device; incoming only; no WhatsApp send)");
 

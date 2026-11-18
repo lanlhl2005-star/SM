@@ -12,8 +12,11 @@ const EXT_BY_MIME = {
   "application/pdf": ".pdf",
 };
 
+const WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 /**
  * Sanitize a free-text label into a safe Windows filename stem.
+ * Strips illegal path chars; keeps readable Unicode (e.g. Chinese).
  */
 export function sanitizeStem(input, { maxLen = 80 } = {}) {
   let s = String(input || "")
@@ -24,6 +27,17 @@ export function sanitizeStem(input, { maxLen = 80 } = {}) {
   s = s.replace(/[. ]+$/g, "");
   if (!s) return "";
   if (s.length > maxLen) s = s.slice(0, maxLen).trim();
+  return s;
+}
+
+/**
+ * Sanitize a WhatsApp group subject into a Windows/UNC folder name segment.
+ * Preserves Chinese/Unicode; strips <>:"/\|?* and control chars.
+ */
+export function sanitizeFolderName(input, { maxLen = 120 } = {}) {
+  let s = sanitizeStem(input, { maxLen });
+  if (!s) return "";
+  if (WIN_RESERVED.test(s)) s = `_${s}`;
   return s;
 }
 
