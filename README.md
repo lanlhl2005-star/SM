@@ -117,7 +117,7 @@ The program **never** creates `(Submitted)` folders. After Word review, a human 
 | Numbering | Bump next `SM-xxx` from existing Site Memo folders; **no Rn** |
 | Copy to | Empty editable field by default |
 | Photos | `photo_blocks.length` N → N bordered tables (SM-005 Single / 0.5) |
-| Output | Unlocked editable `.doc` (Word-compatible HTML `.doc`; opens/edits in Word; layout matches the blank template) |
+| Output | Unlocked editable `.doc` (Word MHTML multipart; Calibri 12; SM-005 bordered photo tables; closing/sign-off after photos) |
 
 ## Server paths (live)
 
