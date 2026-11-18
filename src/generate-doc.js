@@ -2,8 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
 
-const FONT = 'Calibri, "PMingLiU", "SimSun", sans-serif';
-const FONT_SIZE = "12pt";
+/**
+ * Word-facing font stack. Prefer single-quoted style attributes so nested
+ * font names never break HTML (double-quoted style="font-family:Calibri, "X""
+ * truncates and Word falls back to Arial/Normal).
+ */
+const FONT_CSS =
+  "font-family:Calibri;mso-ascii-font-family:Calibri;mso-fareast-font-family:PMingLiU;mso-hansi-font-family:Calibri;mso-bidi-font-family:Arial";
+const FONT_SIZE = "12.0pt";
 const BOUNDARY = "----=_NextPart_SiteMemo_LK";
 const HTML_LOC = "file:///C:/SiteMemo/SiteMemo.htm";
 const ASSET_DIR = "file:///C:/SiteMemo/SiteMemo_files";
@@ -46,30 +52,91 @@ function wrapBase64(b64, width = 76) {
   return lines.join("\r\n");
 }
 
-function bodyFontStyle() {
-  return `font-family:${FONT};font-size:${FONT_SIZE};`;
+function p(styleExtra, inner) {
+  const style = `${FONT_CSS};font-size:${FONT_SIZE};${styleExtra}`;
+  return `<p class="MsoNormal" style='${style}'>${inner}</p>`;
 }
 
 /**
- * SM-005-style bordered photo table: 1 col × 2 rows, Single / 0.5pt.
- * Images are referenced by Content-Location (MHTML parts), never data: URIs —
- * Word does not reliably render data: images and can truncate the rest of the doc.
+ * SM-005 / template photo table: 1 col × 2 rows, BorderStyle.Single / 0.5pt.
+ * Images referenced by Content-Location (MHTML parts), never data: URIs.
  */
 function photoTableHtml(imgSrc, caption, index) {
+  const cell =
+    "border:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;padding:4.0pt 4.0pt 4.0pt 4.0pt";
   return `
-<table class="photo-block MsoNormalTable" border="1" cellspacing="0" cellpadding="0"
-  style="border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;width:100%;margin:10pt 0;">
+<table class="MsoNormalTable photo-block" border="1" cellspacing="0" cellpadding="0"
+  style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;width:100%;margin:10.0pt 0;'>
   <tr>
-    <td valign="top" style="width:100%;border:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;padding:4.0pt;">
-      <img src="${imgSrc}" alt="photo ${index + 1}" width="520" style="width:520px;max-width:100%;height:auto;"/>
+    <td valign="top" style='width:100%;${cell}'>
+      <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>
+        <img src="${imgSrc}" alt="photo ${index + 1}" width="520"
+          style='width:520px;max-width:100%;height:auto;'/>
+      </p>
     </td>
   </tr>
   <tr>
-    <td valign="top" style="width:100%;border:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;padding:4.0pt;${bodyFontStyle()}">
-      ${nl2br(caption)}
+    <td valign="top" style='width:100%;${cell}'>
+      <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>${nl2br(caption)}</p>
     </td>
   </tr>
 </table>`;
+}
+
+/**
+ * Space-padded two-column routing block — matches site-memo-template.doc /
+ * SM-005 paragraph layout (not an HTML table).
+ */
+function routingHtml(payload, locked, copyTo) {
+  const fromLine = `From&nbsp;&nbsp;&nbsp;:&nbsp;${escapeHtml(locked.from_name)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;To&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;${escapeHtml(locked.to_names)}`;
+  const dateLine = `Date&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;${escapeHtml(payload.date)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Company:&nbsp;&nbsp;${escapeHtml(locked.company)}`;
+  const refLine = `Our Ref.&nbsp;:&nbsp;${escapeHtml(locked.our_ref_prefix)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Copy to&nbsp;&nbsp;:&nbsp;&nbsp;${escapeHtml(copyTo)}`;
+  const numLine = `編號&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${escapeHtml(payload.memo_number)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;副本致`;
+
+  return [
+    p("margin:0;", fromLine),
+    p("margin:0;font-size:10.0pt;mso-fareast-font-family:PMingLiU;", "由&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;致"),
+    p("margin:0;", dateLine),
+    p("margin:0;font-size:10.0pt;mso-fareast-font-family:PMingLiU;", "日期&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;公司"),
+    p("margin:0;", refLine),
+    p("margin:0 0 10.0pt 0;font-size:10.0pt;mso-fareast-font-family:PMingLiU;", numLine),
+  ].join("\n");
+}
+
+function bodyHtml(payload) {
+  const parts = [];
+  if (payload.body_intro) {
+    parts.push(
+      p("margin:0 0 6.0pt 0;", nl2br(payload.body_intro))
+    );
+  }
+  const bodyItems = Array.isArray(payload.body_items) ? payload.body_items : [];
+  for (const item of bodyItems) {
+    if (typeof item === "string") {
+      // SM-005 style: indented dash bullets (not HTML <ul>, which Word restyles).
+      parts.push(
+        p("margin:0 0 4.0pt 24.0pt;text-indent:-12.0pt;", `- ${nl2br(item)}`)
+      );
+      continue;
+    }
+    const text = item.item_text || item.text || "";
+    const reason = item.reason
+      ? `<br/>Reason: ${escapeHtml(item.reason)}`
+      : "";
+    if (item.item_number != null) {
+      parts.push(
+        p(
+          "margin:0 0 6.0pt 0;",
+          `${escapeHtml(item.item_number)}) ${nl2br(text)}${reason}`
+        )
+      );
+    } else {
+      parts.push(
+        p("margin:0 0 4.0pt 24.0pt;text-indent:-12.0pt;", `- ${nl2br(text)}${reason}`)
+      );
+    }
+  }
+  return parts.join("\n");
 }
 
 /**
@@ -80,39 +147,12 @@ export function buildSiteMemoHtml(payload, assetUrls) {
   const locked = config.projectLocked;
   const letterheadSrc = assetUrls.letterhead;
   const photoSrcs = assetUrls.photos || [];
-
-  const bodyItems = Array.isArray(payload.body_items) ? payload.body_items : [];
-  const bulletsHtml =
-    bodyItems.length > 0
-      ? `<ul style="margin:6pt 0 12pt 24pt;padding:0;">
-${bodyItems
-  .map((item) => {
-    if (typeof item === "string") {
-      return `  <li style="margin:0 0 4pt 0;${bodyFontStyle()}">${nl2br(item)}</li>`;
-    }
-    const text = item.item_text || item.text || "";
-    const reason = item.reason
-      ? `<br/><span>Reason: ${escapeHtml(item.reason)}</span>`
-      : "";
-    const num = item.item_number != null ? `${escapeHtml(item.item_number)}) ` : "";
-    return `  <li style="margin:0 0 6pt 0;${bodyFontStyle()}">${num}${nl2br(text)}${reason}</li>`;
-  })
-  .join("\n")}
-</ul>`
-      : "";
-
-  const introHtml = payload.body_intro
-    ? `<p style="${bodyFontStyle()}margin:0 0 8pt 0;">${nl2br(payload.body_intro)}</p>`
-    : "";
+  const copyTo = payload.copy_to ?? "";
 
   const photoBlocks = Array.isArray(payload.photo_blocks) ? payload.photo_blocks : [];
   const photosHtml = photoBlocks
-    .map((block, i) =>
-      photoTableHtml(photoSrcs[i], block.caption || "", i)
-    )
+    .map((block, i) => photoTableHtml(photoSrcs[i], block.caption || "", i))
     .join("\n");
-
-  const copyTo = payload.copy_to ?? "";
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
 xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -120,10 +160,13 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="ProgId" content="Word.Document">
-<meta name="Generator" content="Site Memo Draft UI">
+<meta name="Generator" content="Microsoft Word 15">
 <title>Site Memo ${escapeHtml(payload.memo_number)}</title>
 <!--[if gte mso 9]>
 <xml>
+  <o:DocumentProperties>
+    <o:Author>Lap Kei Engineering</o:Author>
+  </o:DocumentProperties>
   <w:WordDocument>
     <w:View>Print</w:View>
     <w:Zoom>100</w:Zoom>
@@ -132,68 +175,61 @@ xmlns="http://www.w3.org/TR/REC-html40">
 </xml>
 <![endif]-->
 <style>
-  /* Template / SM-005: Calibri 12pt body */
-  @page { size: A4; margin: 1.5cm 1.8cm 1.5cm 1.8cm; }
-  body { font-family: ${FONT}; font-size: ${FONT_SIZE}; color: #000; }
-  table.routing { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt 0; }
-  table.routing td { vertical-align: top; font-size: ${FONT_SIZE}; font-family: ${FONT}; padding: 1pt 4pt 1pt 0; }
-  .label-zh { font-family: "PMingLiU", "SimSun", sans-serif; font-size: 10pt; }
-  h1.title { text-align: center; font-family: ${FONT}; font-size: 16pt; font-weight: bold; margin: 8pt 0 12pt 0; }
-  .letterhead { width: 100%; max-width: 680px; height: auto; display: block; margin: 0 auto 6pt auto; }
-  .field-line { margin: 10pt 0 6pt 0; font-family: ${FONT}; font-size: ${FONT_SIZE}; }
-  .field-label { font-weight: bold; text-decoration: underline; }
+  /* Mirror site-memo-template.doc / SM-005: Calibri 12pt body, PMingLiU for ZH */
+  @page Section1 {
+    size: 595.3pt 841.9pt;
+    margin: 42.55pt 51.05pt 42.55pt 51.05pt;
+    mso-header-margin: 36.0pt;
+    mso-footer-margin: 36.0pt;
+  }
+  div.Section1 { page: Section1; }
+  body {
+    ${FONT_CSS};
+    font-size: ${FONT_SIZE};
+    color: windowtext;
+  }
+  p.MsoNormal, li.MsoNormal, div.MsoNormal {
+    margin: 0;
+    ${FONT_CSS};
+    font-size: ${FONT_SIZE};
+    mso-fareast-language: ZH-TW;
+  }
+  span.zh { font-family: PMingLiU; mso-fareast-font-family: PMingLiU; font-size: 10.0pt; }
 </style>
 </head>
-<body>
-<p style="text-align:center;margin:0;">
-  <img class="letterhead" src="${letterheadSrc}" alt="Lap Kei Engineering letterhead"/>
+<body lang="EN-US" style='tab-interval:36.0pt'>
+<div class="Section1">
+
+<p class="MsoNormal" align="center" style='text-align:center;margin:0;'>
+  <img width="640" src="${letterheadSrc}" alt="Lap Kei Engineering letterhead"
+    style='width:640px;max-width:100%;height:auto;'/>
 </p>
-<h1 class="title">Site Memo</h1>
 
-<table class="routing" border="0" cellspacing="0" cellpadding="0">
-  <tr>
-    <td width="50%">From&nbsp;&nbsp;&nbsp;: ${escapeHtml(locked.from_name)}</td>
-    <td width="50%">To&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${escapeHtml(locked.to_names)}</td>
-  </tr>
-  <tr>
-    <td class="label-zh">由</td>
-    <td class="label-zh">致</td>
-  </tr>
-  <tr>
-    <td>Date&nbsp;&nbsp;&nbsp;&nbsp;: ${escapeHtml(payload.date)}</td>
-    <td>Company: ${escapeHtml(locked.company)}</td>
-  </tr>
-  <tr>
-    <td class="label-zh">日期</td>
-    <td class="label-zh">公司</td>
-  </tr>
-  <tr>
-    <td>Our Ref. : ${escapeHtml(locked.our_ref_prefix)}</td>
-    <td>Copy to&nbsp;&nbsp;: ${escapeHtml(copyTo)}</td>
-  </tr>
-  <tr>
-    <td class="label-zh">編號&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${escapeHtml(payload.memo_number)}</td>
-    <td class="label-zh">副本致</td>
-  </tr>
-</table>
+<p class="MsoNormal" align="center" style='${FONT_CSS};font-size:14.0pt;font-weight:bold;text-align:center;margin:8.0pt 0 10.0pt 0;'>Site Memo</p>
 
-<p class="field-line" style="margin:10pt 0 6pt 0;">
+${routingHtml(payload, locked, copyTo)}
+
+<p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:10.0pt 0 6.0pt 0;'>
   <u><b>Project:</b></u> ${escapeHtml(locked.project_title)}
 </p>
-<p class="field-line" style="margin:0 0 10pt 0;">
+<p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0 0 10.0pt 0;'>
   <u><b>Subject:</b></u> ${escapeHtml(payload.subject)}
 </p>
 
-${introHtml}
-${bulletsHtml}
+${bodyHtml(payload)}
 ${photosHtml}
 
-<p style="${bodyFontStyle()}margin:18pt 0 0 0;">Yours faithfully,</p>
-<p style="${bodyFontStyle()}margin:0;">For and on behalf of</p>
-<p style="${bodyFontStyle()}margin:0 0 28pt 0;">${escapeHtml(locked.closing_company)}</p>
-<p style="${bodyFontStyle()}margin:0;">${escapeHtml(locked.signatory_name)}</p>
-<p style="${bodyFontStyle()}margin:0;">${escapeHtml(locked.signatory_title)}</p>
-<p style="font-family:${FONT};font-size:10pt;margin:8pt 0 0 0;">${escapeHtml(locked.ref_initials)}</p>
+${p("margin:18.0pt 0 0 0;", "Yours faithfully,")}
+${p("margin:0;", "For and on behalf of")}
+${p("margin:0;", escapeHtml(locked.closing_company))}
+<p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>&nbsp;</p>
+<p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>&nbsp;</p>
+<p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>&nbsp;</p>
+${p("margin:0;", escapeHtml(locked.signatory_name))}
+${p("margin:0;", escapeHtml(locked.signatory_title))}
+${p("margin:6.0pt 0 0 0;font-size:10.0pt;", escapeHtml(locked.ref_initials))}
+
+</div>
 </body>
 </html>
 `;
