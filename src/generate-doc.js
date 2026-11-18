@@ -10,19 +10,6 @@ import { config } from "./config.js";
 const FONT_CSS =
   "font-family:Calibri;mso-ascii-font-family:Calibri;mso-fareast-font-family:PMingLiU;mso-hansi-font-family:Calibri;mso-bidi-font-family:Arial";
 const FONT_SIZE = "12.0pt";
-const BOUNDARY = "----=_NextPart_SiteMemo_LK";
-/** HTML root label — Word resolves relative img src against this directory. */
-const HTML_LOC = "file:///C:/SiteMemo/SiteMemo.htm";
-/** Absolute Content-Location prefix for image MIME parts (Word MHTML style). */
-const ASSET_DIR_ABS = "file:///C:/SiteMemo/SiteMemo_files";
-/**
- * Relative path prefix used in HTML/VML src. Must resolve against HTML_LOC to
- * the same URI as each image part's Content-Location. Word desktop embeds via
- * Content-Location matching — not cid: (email-oriented) and not absolute
- * file:/// img src (treated as dead disk links).
- */
-const ASSET_DIR_REL = "SiteMemo_files";
-const CID_DOMAIN = "sitememo.lk";
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -45,38 +32,18 @@ function mimeFor(filePath) {
   return "image/jpeg";
 }
 
-function extForMime(mime) {
-  if (mime === "image/png") return ".png";
-  if (mime === "image/gif") return ".gif";
-  if (mime === "image/bmp") return ".bmp";
-  if (mime === "image/webp") return ".webp";
-  return ".jpg";
+/** Inline image bytes Word desktop actually displays in Word-HTML `.doc`. */
+function dataUriFromBuffer(mime, buf) {
+  return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
 }
 
-/** Word MHTML prefers CRLF and 76-char base64 lines. */
-function wrapBase64(b64, width = 76) {
-  const lines = [];
-  for (let i = 0; i < b64.length; i += width) {
-    lines.push(b64.slice(i, i + width));
-  }
-  return lines.join("\r\n");
+function dataUriFromFile(filePath) {
+  return dataUriFromBuffer(mimeFor(filePath), fs.readFileSync(filePath));
 }
 
 function p(styleExtra, inner) {
   const style = `${FONT_CSS};font-size:${FONT_SIZE};${styleExtra}`;
   return `<p class="MsoNormal" style='${style}'>${inner}</p>`;
-}
-
-function makeContentId(name) {
-  return `${name}@${CID_DOMAIN}`;
-}
-
-function relativeAssetRef(name) {
-  return `${ASSET_DIR_REL}/${name}`;
-}
-
-function absoluteAssetLoc(name) {
-  return `${ASSET_DIR_ABS}/${name}`;
 }
 
 /**
@@ -104,42 +71,20 @@ export function extractLetterheadPngFromTemplate(templatePath = config.templateD
 }
 
 /**
- * Word-native embedded image: VML imagedata (Print/layout) + fallback <img>.
- * Both use relative SiteMemo_files/... paths that match Content-Location parts.
- * o:href keeps a cid: secondary for agents that prefer Content-ID.
- */
-function embeddedImageHtml({ relSrc, cid, widthPx, alt, shapeId }) {
-  const widthPt = Math.round(widthPx * 0.75 * 100) / 100;
-  const safeAlt = escapeHtml(alt);
-  return `<!--[if gte vml 1]><v:shape id="${shapeId}" type="#_x0000_t75" alt="${safeAlt}"
- style='width:${widthPt}pt' o:allowoverlap="f">
- <v:imagedata src="${relSrc}" o:href="cid:${cid}" o:title="${safeAlt}"/>
-</v:shape><![endif]--><![if !vml]><img width="${widthPx}" src="${relSrc}"
- alt="${safeAlt}" style='width:${widthPx}px;max-width:100%;height:auto;'
- v:shapes="${shapeId}"/><![endif]>`;
-}
-
-/**
  * SM-005 / template photo table: 1 col × 2 rows, BorderStyle.Single / 0.5pt.
- * Images use relative SiteMemo_files/ refs (Word Content-Location embeds).
+ * Images use data: URIs (proven on Word desktop before MHTML format PRs).
  */
-function photoTableHtml(imgMeta, caption, index) {
+function photoTableHtml(imgSrc, caption, index) {
   const cell =
     "border:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;padding:4.0pt 4.0pt 4.0pt 4.0pt";
-  const image = embeddedImageHtml({
-    relSrc: imgMeta.relSrc,
-    cid: imgMeta.cid,
-    widthPx: 520,
-    alt: `photo ${index + 1}`,
-    shapeId: `_x0000_i${1026 + index}`,
-  });
   return `
 <table class="MsoNormalTable photo-block" border="1" cellspacing="0" cellpadding="0"
   style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;width:100%;margin:10.0pt 0;'>
   <tr>
     <td valign="top" style='width:100%;${cell}'>
       <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>
-        ${image}
+        <img width="520" src="${imgSrc}" alt="photo ${index + 1}"
+          style='width:520px;max-width:100%;height:auto;'/>
       </p>
     </td>
   </tr>
@@ -208,36 +153,32 @@ function bodyHtml(payload) {
 }
 
 /**
- * Build Word-openable HTML body (no MIME wrapper). Image srcs must be relative
- * SiteMemo_files/... paths that match Content-Location on MHTML parts.
+ * Build Word-openable HTML (saved as `.doc`). Images are inline
+ * `data:image/...;base64,...` — the strategy that displayed photos in Word
+ * before format-matching MHTML PRs (#12–#15). MHTML cid / relative
+ * SiteMemo_files embeds still show “The picture can't be displayed” (SM-009).
  */
-export function buildSiteMemoHtml(payload, assetUrls) {
+export function buildSiteMemoHtml(payload) {
   const locked = config.projectLocked;
-  const letterhead = assetUrls.letterhead;
-  const photoSrcs = assetUrls.photos || [];
   const copyTo = payload.copy_to ?? "";
+
+  const letterheadBuf = extractLetterheadPngFromTemplate(config.templateDoc);
+  const letterheadSrc = dataUriFromBuffer("image/png", letterheadBuf);
 
   const photoBlocks = Array.isArray(payload.photo_blocks) ? payload.photo_blocks : [];
   const photosHtml = photoBlocks
-    .map((block, i) => photoTableHtml(photoSrcs[i], block.caption || "", i))
+    .map((block, i) =>
+      photoTableHtml(dataUriFromFile(block.absolutePath), block.caption || "", i)
+    )
     .join("\n");
-
-  const letterheadHtml = embeddedImageHtml({
-    relSrc: letterhead.relSrc,
-    cid: letterhead.cid,
-    widthPx: 640,
-    alt: "Lap Kei Engineering letterhead",
-    shapeId: "_x0000_i1025",
-  });
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
 xmlns:w="urn:schemas-microsoft-com:office:word"
-xmlns:v="urn:schemas-microsoft-com:vml"
 xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="ProgId" content="Word.Document">
-<meta name="Generator" content="Microsoft Word 15">
+<meta name="Generator" content="Site Memo Draft UI">
 <title>Site Memo ${escapeHtml(payload.memo_number)}</title>
 <!--[if gte mso 9]>
 <xml>
@@ -249,33 +190,6 @@ xmlns="http://www.w3.org/TR/REC-html40">
     <w:Zoom>100</w:Zoom>
     <w:DoNotOptimizeForBrowser/>
   </w:WordDocument>
-</xml>
-<![endif]-->
-<!--[if gte vml 1]>
-<xml>
-  <o:shapelayout v:ext="edit">
-   <o:idmap v:ext="edit" data="1"/>
-  </o:shapelayout>
-  <v:shapetype id="_x0000_t75" coordsize="21600,21600" o:spt="75"
-   o:preferrelative="t" path="m@4@5l@4@11@9@11@9@5xe" filled="f" stroked="f">
-   <v:stroke joinstyle="miter"/>
-   <v:formulas>
-    <v:f eqn="if lineDrawn pixelLineWidth 0"/>
-    <v:f eqn="sum @0 1 0"/>
-    <v:f eqn="sum 0 0 @1"/>
-    <v:f eqn="prod @2 1 2"/>
-    <v:f eqn="prod @3 21600 pixelWidth"/>
-    <v:f eqn="prod @3 21600 pixelHeight"/>
-    <v:f eqn="sum @0 0 1"/>
-    <v:f eqn="prod @6 1 2"/>
-    <v:f eqn="prod @7 21600 pixelWidth"/>
-    <v:f eqn="sum @8 21600 0"/>
-    <v:f eqn="prod @7 21600 pixelHeight"/>
-    <v:f eqn="sum @10 21600 0"/>
-   </v:formulas>
-   <v:path o:extrusionok="f" gradientshapeok="t" o:connecttype="rect"/>
-   <o:lock v:ext="edit" aspectratio="t"/>
-  </v:shapetype>
 </xml>
 <![endif]-->
 <style>
@@ -306,7 +220,8 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <div class="Section1">
 
 <p class="MsoNormal" align="center" style='text-align:center;margin:0;'>
-  ${letterheadHtml}
+  <img width="640" src="${letterheadSrc}" alt="Lap Kei Engineering letterhead"
+    style='width:640px;max-width:100%;height:auto;'/>
 </p>
 
 <p class="MsoNormal" align="center" style='${FONT_CSS};font-size:14.0pt;font-weight:bold;text-align:center;margin:8.0pt 0 10.0pt 0;'>Site Memo</p>
@@ -339,230 +254,130 @@ ${p("margin:6.0pt 0 0 0;font-size:10.0pt;", escapeHtml(locked.ref_initials))}
 `;
 }
 
-function mimePart({ contentLocation, contentId, contentType, transferEncoding, body }) {
-  const lines = [`--${BOUNDARY}`];
-  if (contentLocation) {
-    lines.push(`Content-Location: ${contentLocation}`);
-  }
-  if (contentId) {
-    lines.push(`Content-ID: <${contentId}>`);
-  }
-  lines.push(
-    `Content-Transfer-Encoding: ${transferEncoding}`,
-    `Content-Type: ${contentType}`,
-    "",
-    body
+function isPng(bytes) {
+  return (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
   );
-  return lines.join("\r\n");
+}
+
+function isJpeg(bytes) {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8;
+}
+
+function isGif(bytes) {
+  return (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46
+  );
 }
 
 /**
- * Pack HTML + binary images as Word-compatible MHTML saved with a `.doc`
- * extension. Images are referenced by relative SiteMemo_files/ paths that
- * match each part's Content-Location (Word's native MHTML embedding).
- * Content-ID / cid: is retained only as a secondary VML o:href label.
- *
- * Letterhead bytes come from the PNG already inside site-memo-template.doc —
- * not from docs/site-memo-assets/lap-kei-letterhead.png.
+ * Validate Word-HTML `.doc` image embeds by decoding each data: URI to bytes
+ * and checking image magic — not Content-Location string matching (SM-009
+ * had valid MHTML parts + refs and Word still failed).
  */
-export function buildSiteMemoMhtml(payload) {
-  const letterheadBuf = extractLetterheadPngFromTemplate(config.templateDoc);
-  const letterheadName = "letterhead.png";
-  const letterheadCid = makeContentId(letterheadName);
-  const letterheadRel = relativeAssetRef(letterheadName);
-  const letterheadLoc = absoluteAssetLoc(letterheadName);
+export function verifyWordHtmlImageEmbeds(htmlOrDoc) {
+  const html = String(htmlOrDoc).replace(/^\uFEFF/, "");
+  const problems = [];
 
-  const photoBlocks = Array.isArray(payload.photo_blocks) ? payload.photo_blocks : [];
-  const photoAssets = photoBlocks.map((block, i) => {
-    const filePath = block.absolutePath;
-    const mime = mimeFor(filePath);
-    const name = `photo${i}${extForMime(mime)}`;
-    return {
-      name,
-      relSrc: relativeAssetRef(name),
-      loc: absoluteAssetLoc(name),
-      cid: makeContentId(name),
-      mime,
-      buf: fs.readFileSync(filePath),
-    };
-  });
-
-  const html = buildSiteMemoHtml(payload, {
-    letterhead: { relSrc: letterheadRel, cid: letterheadCid },
-    photos: photoAssets.map((a) => ({ relSrc: a.relSrc, cid: a.cid })),
-  });
-
-  const parts = [];
-  parts.push(
-    mimePart({
-      contentLocation: HTML_LOC,
-      contentId: makeContentId("SiteMemo.htm"),
-      contentType: 'text/html; charset="utf-8"',
-      transferEncoding: "base64",
-      body: wrapBase64(Buffer.from(html, "utf8").toString("base64")),
-    })
-  );
-  // Letterhead: template-sourced PNG, Content-Location embedded (not a site photo).
-  parts.push(
-    mimePart({
-      contentLocation: letterheadLoc,
-      contentId: letterheadCid,
-      contentType: "image/png",
-      transferEncoding: "base64",
-      body: wrapBase64(letterheadBuf.toString("base64")),
-    })
-  );
-  for (const asset of photoAssets) {
-    parts.push(
-      mimePart({
-        contentLocation: asset.loc,
-        contentId: asset.cid,
-        contentType: asset.mime,
-        transferEncoding: "base64",
-        body: wrapBase64(asset.buf.toString("base64")),
-      })
+  if (/^MIME-Version:/m.test(html) || /multipart\/related/i.test(html)) {
+    problems.push(
+      "document is MHTML; Word desktop rejects Site Memo MHTML image embeds (use Word HTML + data: URIs)"
     );
   }
-
-  const header = [
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/related; boundary="${BOUNDARY}"; type="text/html"`,
-    "",
-  ].join("\r\n");
-
-  return `${header}${parts.join("\r\n")}\r\n--${BOUNDARY}--\r\n`;
-}
-
-/**
- * Parse MHTML image parts and verify each HTML/VML image ref resolves to a
- * base64 part with valid image magic bytes. Used by tests / smoke checks.
- */
-export function verifyMhtmlImageEmbeds(mhtml) {
-  const boundaryRe = new RegExp(
-    `^--${BOUNDARY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?\\r?\\n`,
-    "m"
-  );
-  const rawParts = mhtml.split(boundaryRe).slice(1);
-  const imageParts = new Map();
-  let html = null;
-
-  for (const raw of rawParts) {
-    if (!raw.trim() || raw.startsWith("--")) continue;
-    const sep = raw.indexOf("\r\n\r\n");
-    if (sep < 0) continue;
-    const headers = raw.slice(0, sep);
-    const body = raw.slice(sep + 4).replace(/\r\n--[\s\S]*$/, "").trim();
-    const locMatch = headers.match(/Content-Location:\s*(\S+)/i);
-    const typeMatch = headers.match(/Content-Type:\s*([^\r\n;]+)/i);
-    const encMatch = headers.match(/Content-Transfer-Encoding:\s*(\S+)/i);
-    const loc = locMatch ? locMatch[1] : "";
-    const type = typeMatch ? typeMatch[1].trim().toLowerCase() : "";
-    const enc = encMatch ? encMatch[1].toLowerCase() : "";
-    if (type.startsWith("text/html")) {
-      const bytes =
-        enc === "base64"
-          ? Buffer.from(body.replace(/\r?\n/g, ""), "base64")
-          : Buffer.from(body, "utf8");
-      html = bytes.toString("utf8");
-      continue;
-    }
-    if (!type.startsWith("image/")) continue;
-    const bytes =
-      enc === "base64"
-        ? Buffer.from(body.replace(/\r?\n/g, ""), "base64")
-        : Buffer.from(body, "binary");
-    const name = loc.split("/").pop();
-    imageParts.set(loc, { type, bytes, name });
-    if (name) imageParts.set(`${ASSET_DIR_REL}/${name}`, { type, bytes, name });
+  if (/SiteMemo_files\//.test(html)) {
+    problems.push("relative SiteMemo_files/ refs present (SM-009 failed in Word)");
+  }
+  if (/\bsrc=["']cid:/i.test(html)) {
+    problems.push("cid: primary src present (SM-008 failed in Word)");
+  }
+  if (/\bsrc=["']file:/i.test(html)) {
+    problems.push("file:/// img src present (dead external link in Word)");
   }
 
-  if (!html) {
-    throw new Error("MHTML missing HTML root part");
-  }
-
-  const refs = [
-    ...html.matchAll(/(?:src|o:href)=["']([^"']+)["']/gi),
+  const dataUris = [
+    ...html.matchAll(
+      /<img\b[^>]*?\bsrc=["'](data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)["']/gi
+    ),
   ].map((m) => m[1]);
 
-  const imageRefs = refs.filter(
-    (r) =>
-      r.includes("SiteMemo_files/") ||
-      r.startsWith("cid:") ||
-      r.startsWith("file:") ||
-      r.startsWith("data:")
-  );
-
-  if (imageRefs.length === 0) {
-    throw new Error("HTML has no image references");
+  if (dataUris.length === 0) {
+    problems.push("no data:image/...;base64 img src found");
   }
 
-  const problems = [];
-  for (const ref of imageRefs) {
-    if (ref.startsWith("file:")) {
-      problems.push(`absolute file URL in markup (dead disk link): ${ref}`);
+  const decoded = [];
+  for (let i = 0; i < dataUris.length; i++) {
+    const uri = dataUris[i];
+    const m = uri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) {
+      problems.push(`img[${i}] malformed data URI`);
       continue;
     }
-    if (ref.startsWith("data:")) {
-      problems.push(`data: URI in markup (Word truncates): ${ref.slice(0, 32)}…`);
+    const mime = m[1].toLowerCase();
+    let bytes;
+    try {
+      bytes = Buffer.from(m[2], "base64");
+    } catch {
+      problems.push(`img[${i}] base64 decode failed`);
       continue;
     }
-    if (ref.startsWith("cid:")) {
-      // Secondary VML o:href only — primary src must still be relative.
+    if (bytes.length < 32) {
+      problems.push(`img[${i}] decoded too small (${bytes.length} bytes)`);
       continue;
     }
-    if (!ref.startsWith(`${ASSET_DIR_REL}/`)) {
-      problems.push(`unexpected image ref (want ${ASSET_DIR_REL}/…): ${ref}`);
+    const magicOk =
+      (mime.includes("png") && isPng(bytes)) ||
+      ((mime.includes("jpeg") || mime.includes("jpg")) && isJpeg(bytes)) ||
+      (mime.includes("gif") && isGif(bytes)) ||
+      isPng(bytes) ||
+      isJpeg(bytes) ||
+      isGif(bytes);
+    if (!magicOk) {
+      problems.push(`img[${i}] bad image magic for ${mime}`);
       continue;
     }
-    const part =
-      imageParts.get(ref) ||
-      imageParts.get(`${ASSET_DIR_ABS}/${ref.slice(ASSET_DIR_REL.length + 1)}`);
-    if (!part) {
-      problems.push(`no MIME part for ${ref}`);
-      continue;
-    }
-    if (part.bytes.length < 32) {
-      problems.push(`image part too small for ${ref}: ${part.bytes.length} bytes`);
-      continue;
-    }
-    const isPng =
-      part.bytes[0] === 0x89 &&
-      part.bytes[1] === 0x50 &&
-      part.bytes[2] === 0x4e &&
-      part.bytes[3] === 0x47;
-    const isJpeg = part.bytes[0] === 0xff && part.bytes[1] === 0xd8;
-    const isGif =
-      part.bytes[0] === 0x47 && part.bytes[1] === 0x49 && part.bytes[2] === 0x46;
-    if (!isPng && !isJpeg && !isGif) {
-      problems.push(`bad image magic for ${ref}`);
-    }
+    decoded.push({ mime, bytes, byteLength: bytes.length });
   }
 
-  // Primary <img src> / v:imagedata src must be relative (not cid:/file:).
-  const primarySrcs = [
-    ...html.matchAll(/<(?:img|v:imagedata)\b[^>]*?\bsrc=["']([^"']+)["']/gi),
-  ].map((m) => m[1]);
-  for (const src of primarySrcs) {
-    if (!src.startsWith(`${ASSET_DIR_REL}/`)) {
-      problems.push(`primary src must be relative ${ASSET_DIR_REL}/…, got ${src}`);
+  // First image should be template letterhead PNG.
+  if (decoded.length > 0) {
+    const letterheadExpected = extractLetterheadPngFromTemplate(config.templateDoc);
+    if (!decoded[0].bytes.equals(letterheadExpected)) {
+      problems.push(
+        "first img is not the PNG letterhead extracted from site-memo-template.doc"
+      );
     }
   }
 
   if (problems.length) {
-    throw new Error(`MHTML image embed check failed:\n- ${problems.join("\n- ")}`);
+    throw new Error(
+      `Word HTML image embed check failed:\n- ${problems.join("\n- ")}`
+    );
   }
 
   return {
-    html,
-    imagePartCount: [...imageParts.keys()].filter((k) => k.startsWith("file:")).length,
-    primarySrcs,
+    imageCount: decoded.length,
+    letterheadBytes: decoded[0]?.byteLength ?? 0,
+    photoBytes: decoded.slice(1).map((d) => d.byteLength),
   };
 }
 
+/** @deprecated Alias kept for older smoke helpers; same as verifyWordHtmlImageEmbeds. */
+export function verifyMhtmlImageEmbeds(htmlOrDoc) {
+  return verifyWordHtmlImageEmbeds(htmlOrDoc);
+}
+
 export function writeSiteMemoDoc(outPath, payload) {
-  const mhtml = buildSiteMemoMhtml(payload);
+  const html = buildSiteMemoHtml(payload);
+  verifyWordHtmlImageEmbeds(html);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  // MHTML is ASCII headers + base64; write as binary-safe utf8 (no BOM).
-  fs.writeFileSync(outPath, mhtml, "utf8");
+  // UTF-8 BOM helps Word on Windows detect encoding for CJK labels.
+  fs.writeFileSync(outPath, `\uFEFF${html}`, "utf8");
   return outPath;
 }
