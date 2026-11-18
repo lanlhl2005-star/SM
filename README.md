@@ -1,73 +1,108 @@
 # Site Memo (SM)
 
-Program home for **LK-P01043** site memos: collect WhatsApp group photos from a server backup, pick/group/caption them, and generate unlocked editable `.doc` Site Memos for Word review.
+Local web UI for **LK-P01043** site memos: browse WhatsApp group photo backups, group photos into ordered `photo_blocks` with captions, fill date/subject/body, and write an unlocked editable **Draft** `.doc` under the Site Memo share.
 
-This repository holds specs, the blank template, and (later) tooling. Full UI is not implemented yet.
+Send-to-WhatsApp is **out of scope** (on hold).
 
-## Server paths
+## Quick start (Windows colleagues)
 
-### Site Memo store (generated / edited memos)
-
-```text
-\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
+```bat
+git clone https://github.com/lanlhl2005-star/SM.git
+cd SM
+copy .env.example .env
+npm install
+npm start
 ```
 
-Per-memo folders match live naming: `SM-{nn} {short subject} ({status})`.
+Open **http://127.0.0.1:3847** in a browser.
 
-### WhatsApp group photo backup
+### Point at the live shares
 
-```text
-\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup
+Edit `.env` (or set environment variables). UNC works when the share is reachable; a mapped drive letter also works:
+
+```env
+USE_MOCK=false
+PHOTO_BACKUP_ROOT=\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup
+SITE_MEMO_ROOT=\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
 ```
 
-Layout (required day folders — no flat dump at the group root):
+Mapped-drive example:
 
-```text
-\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\
-  <group>/
-    YYYY-MM-DD/
-      <original-filename>
+```env
+USE_MOCK=false
+PHOTO_BACKUP_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup
+SITE_MEMO_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
 ```
 
-Example groups: `site-memo`, `material-delivery`, `internal`, `bim-coordination`.
+Requires **Node.js 20+**.
 
-## Draft-only rule
+## Mock / cloud fallback
 
-The program **always** creates `(Draft)` folders and files only, for example:
+When `USE_MOCK=true` (default in the shipped `.env`) or the live UNC paths are unreachable, the app uses repo fixtures:
 
 ```text
-\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo\SM-06 … (Draft)\
+mock/Group_photo_backup/site-memo/YYYY-MM-DD/   ← pick photos here
+mock/Site Memo/                                 ← Draft folders written here
 ```
 
-Humans rename `(Draft)` → `(Submitted)` after Word review. Automation must never write `(Submitted)`.
+Smoke-test without the UI:
 
-## WhatsApp send — on hold
+```bat
+npm run smoke
+```
 
-Auto-send of the generated `.doc` into any WhatsApp group is **on hold** (personal-number limitation). Intake for this phase is **manual drop / backup only**. Do not design bot send unless a Business/Cloud API number is added later.
+## UI flow
+
+1. Choose a **day folder** under `…\Group_photo_backup\site-memo\YYYY-MM-DD\`.
+2. Click photos to build ordered **photo blocks** (1 image + 1 editable caption each).
+3. Fill **date**, **subject**, body intro/bullets; leave **Copy to** empty unless needed.
+4. **Create Draft .doc** → writes only:
+
+```text
+…\Site Memo\SM-{nn} {short subject} (Draft)\Site_Memo_LK-P01043-SM-{NNN}.doc
+```
+
+The program **never** creates `(Submitted)` folders. After Word review, a human renames `(Draft)` → `(Submitted)`.
+
+## Generator rules
+
+| Rule | Behavior |
+| --- | --- |
+| From / To / Company / signatory | Project-locked defaults for LK-P01043 |
+| Numbering | Bump next `SM-xxx` from existing Site Memo folders; **no Rn** |
+| Copy to | Empty editable field by default |
+| Photos | `photo_blocks.length` N → N bordered tables (SM-005 Single / 0.5) |
+| Output | Unlocked editable `.doc` (Word-compatible HTML `.doc`; opens/edits in Word; layout matches the blank template) |
+
+## Server paths (live)
+
+**Photo backup (browse):**
+
+```text
+\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\site-memo\YYYY-MM-DD\
+```
+
+**Site Memo store (write Draft only):**
+
+```text
+\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo\
+```
 
 ## Docs in this repo
 
 | Doc | Purpose |
 | --- | --- |
-| [docs/whatsapp-manual-intake-plan.md](docs/whatsapp-manual-intake-plan.md) | Manual WA backup → UI pick/group/caption → Draft `.doc` |
-| [docs/site-memo-template-spec.md](docs/site-memo-template-spec.md) | Template structure, field classes, photo-block rules |
-| [docs/site-memo-field-map.json](docs/site-memo-field-map.json) | Machine-readable field map for generation |
-| [docs/site-memo-template.doc](docs/site-memo-template.doc) | Editable blank `.doc` template (SM-005 styling) |
-| [docs/site-memo-assets/lap-kei-letterhead.png](docs/site-memo-assets/lap-kei-letterhead.png) | Letterhead banner reused from sample memos |
+| [docs/whatsapp-manual-intake-plan.md](docs/whatsapp-manual-intake-plan.md) | Manual WA backup → UI → Draft `.doc` |
+| [docs/site-memo-template-spec.md](docs/site-memo-template-spec.md) | Template structure & photo-block rules |
+| [docs/site-memo-field-map.json](docs/site-memo-field-map.json) | Machine-readable field map |
+| [docs/site-memo-template.doc](docs/site-memo-template.doc) | Blank `.doc` template (SM-005 styling) |
+| [docs/site-memo-assets/lap-kei-letterhead.png](docs/site-memo-assets/lap-kei-letterhead.png) | Letterhead from sample memos |
 
-Sample memos (`SM-001`…`SM-005`) live in the Project store, not this repo (large binaries).
+## CLI
 
-## Project defaults (LK-P01043)
-
-- **From / To / Company / signatory** — fixed project defaults (see field map).
-- **Numbering** — bump `SM-xxx` only; no `Rn` revisions.
-- **Copy to** — keep an editable empty field.
-- **Output** — unlocked editable `.doc` (not `.docx` as the working memo).
-- **Photos** — generate-time `photo_blocks[]` length N → N bordered photo+caption tables (Single / 0.5).
-
-## Skeleton
-
-Minimal placeholder only (`package.json`, empty `src/`). No UI yet.
+```bat
+npm run draft -- --subject "14F Diversion" --short "14F Diversion" --image 2026-11-18/IMG_stair_clash.jpg --caption "Photo of Steel stair"
+```
 
 ## License / ownership
 

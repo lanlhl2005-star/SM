@@ -1,12 +1,19 @@
 {
   "name": "site-memo",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
-  "description": "LK-P01043 Site Memo: WhatsApp photo intake → Draft editable .doc generation",
+  "description": "LK-P01043 Site Memo: WhatsApp photo pick/caption → Draft editable .doc",
+  "type": "module",
   "scripts": {
-    "test": "echo \"No tests yet\""
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "draft": "node src/cli-draft.js",
+    "smoke": "node src/cli-draft.js --subject \"Smoke test chilled water notice\" --short \"chilled water notice\" --intro \"Refer to site inspection, please note the following.\" --bullet \"Temporary storage area at L1\" --image 2026-11-18/IMG_chiller_plant.jpg --caption \"Photo of 14/F Chiller Plant\" --image 2026-11-18/IMG_cooling_tower.jpg --caption \"Photo of R/F Cooling Tower Area (Low Zone)\""
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
   }
 }
