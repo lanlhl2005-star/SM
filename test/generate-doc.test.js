@@ -65,13 +65,41 @@ describe("generate-doc MHTML site memo", () => {
 
     const html = decodeHtmlPart(mhtml);
 
-    assert.match(html, /Calibri/);
-    assert.match(html, /font-size:\s*12pt/);
+    // Fonts: Calibri + Word mso-* (never nested double-quotes that break style='')
+    assert.match(html, /font-family:Calibri/);
+    assert.match(html, /mso-ascii-font-family:Calibri/);
+    assert.match(html, /mso-fareast-font-family:PMingLiU/);
+    assert.match(html, /font-size:12\.0pt/);
+    assert.doesNotMatch(
+      html,
+      /style="[^"]*font-family:Calibri,\s*"/,
+      "inline style must not nest double-quotes inside double-quoted attributes"
+    );
+    assert.doesNotMatch(
+      html,
+      /font-family:Calibri,\s*["']/,
+      "font-family must not use quoted secondary names that break attributes"
+    );
+
+    // Template-like routing (space columns), not an HTML routing table
+    assert.match(html, /From/);
+    assert.match(html, /Our Ref/);
+    assert.doesNotMatch(html, /table class="routing"/);
+
+    // Project / Subject underline
     assert.match(html, /<u><b>Project:<\/b><\/u>/);
     assert.match(html, /<u><b>Subject:<\/b><\/u>/);
-    assert.match(html, /class="photo-block/);
+
+    // SM-005 dash bullets (not <ul>)
+    assert.match(html, /- Temporary storage area at L1/);
+    assert.doesNotMatch(html, /<ul[\s>]/);
+
+    // Photo tables Single / 0.5
+    assert.match(html, /class="MsoNormalTable photo-block"/);
     assert.match(html, /mso-border-alt:solid windowtext \.5pt/);
     assert.match(html, /Photo of 14\/F Chiller Plant/);
+
+    // Sign-off after photos
     assert.match(html, /Yours faithfully,/);
     assert.match(html, /For and on behalf of/);
     assert.match(html, /Lap Kei Engineering Co\., Ltd\./);
@@ -84,7 +112,11 @@ describe("generate-doc MHTML site memo", () => {
     );
 
     // Two photo parts + letterhead.
-    const photoParts = [...mhtml.matchAll(/Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo\d+\./g)];
+    const photoParts = [
+      ...mhtml.matchAll(
+        /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo\d+\./g
+      ),
+    ];
     assert.equal(photoParts.length, 2);
 
     // No megabyte single lines (Word-hostile).
@@ -95,7 +127,6 @@ describe("generate-doc MHTML site memo", () => {
     writeSiteMemoDoc(out, payload);
     assert.ok(fs.existsSync(out));
     const written = fs.readFileSync(out, "utf8");
-    // Visible strings live in the base64 HTML part; outer MHTML exposes asset names.
     assert.match(written, /photo0\.jpg/);
     assert.match(written, /letterhead\.png/);
     const writtenHtml = decodeHtmlPart(written);
@@ -127,5 +158,6 @@ describe("generate-doc MHTML site memo", () => {
     assert.match(html, /Yours faithfully,/);
     assert.match(html, /Delivery Note/);
     assert.match(html, /<u><b>Subject:<\/b><\/u>/);
+    assert.match(html, /mso-ascii-font-family:Calibri/);
   });
 });
