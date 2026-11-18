@@ -59,6 +59,8 @@ PHOTO_BACKUP_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_b
 SITE_MEMO_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
 ```
 
+**Windows UNC note:** `npm start` / `wa-backup` / related scripts launch via `scripts/run-with-unc.mjs`, which sets `NODE_UNC_HOST_ALLOWLIST` from the UNC host in those roots (default `Server`). That avoids `ERR_UNC_HOST_NOT_ALLOWED` on Node builds that restrict UNC hosts (Electron/Cursor-patched). PowerShell can list the share even when a restricted Node cannot — restart after `git pull` so the wrapper is used. Optional manual override: `NODE_UNC_HOST_ALLOWLIST=Server` (backslash-separated for multiple hosts).
+
 Optional: set `PHOTO_GROUP` to a top-level folder name under `Group_photo_backup` (live WhatsApp group subject, or `individual`) to pre-select it in the UI. Leave unset to pick from the folder list.
 
 Requires **Node.js 20.9+**.
