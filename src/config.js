@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { allowUncHostsForPaths } from "./unc-allowlist.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -74,6 +75,22 @@ function resolveMaybeRelative(p, fallback) {
   return path.isAbsolute(value) ? value : path.resolve(ROOT, value);
 }
 
+const photoBackupRoot = process.env.PHOTO_BACKUP_ROOT
+  ? process.env.PHOTO_BACKUP_ROOT
+  : useMock
+    ? mockPhotoRoot
+    : defaults.paths.photoBackupRoot;
+const siteMemoRoot = process.env.SITE_MEMO_ROOT
+  ? process.env.SITE_MEMO_ROOT
+  : useMock
+    ? mockSiteMemoRoot
+    : defaults.paths.siteMemoRoot;
+
+// Prime UNC allowlist before any photoBackupRoot / siteMemoRoot fs I/O.
+// Harmless on official Node builds; required for Electron/Cursor-patched Node
+// that throws ERR_UNC_HOST_NOT_ALLOWED for \\Server\... unless allowlisted.
+allowUncHostsForPaths([photoBackupRoot, siteMemoRoot]);
+
 export const config = {
   root: ROOT,
   useMock,
@@ -85,16 +102,8 @@ export const config = {
       ? process.env.PHOTO_GROUP
       : defaults.photoGroup ?? ""
   ).trim(),
-  photoBackupRoot: process.env.PHOTO_BACKUP_ROOT
-    ? process.env.PHOTO_BACKUP_ROOT
-    : useMock
-      ? mockPhotoRoot
-      : defaults.paths.photoBackupRoot,
-  siteMemoRoot: process.env.SITE_MEMO_ROOT
-    ? process.env.SITE_MEMO_ROOT
-    : useMock
-      ? mockSiteMemoRoot
-      : defaults.paths.siteMemoRoot,
+  photoBackupRoot,
+  siteMemoRoot,
   projectLocked: defaults.projectLocked,
   host: process.env.HOST || defaults.server.host,
   port: Number(process.env.PORT || defaults.server.port),
