@@ -7,14 +7,24 @@ const state = {
   selected: new Set(),
   blocks: [],
   defaults: null,
+  browseError: null,
 };
 
 const $ = (id) => document.getElementById(id);
 
+function formatApiError(data, fallback) {
+  const base = data?.error || fallback || "Request failed";
+  const bits = [];
+  if (data?.code) bits.push(`code=${data.code}`);
+  if (data?.errno != null && data.errno !== "") bits.push(`errno=${data.errno}`);
+  if (data?.path) bits.push(`path=${data.path}`);
+  return bits.length ? `${base} (${bits.join(", ")})` : base;
+}
+
 async function api(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) throw new Error(formatApiError(data, res.statusText));
   return data;
 }
 
@@ -25,11 +35,16 @@ function photoUrl(rel) {
 function renderPathMeta() {
   const d = state.defaults;
   if (!d) return;
+  const err =
+    state.browseError ||
+    (d.paths.listError && formatApiError(d.paths.listError));
   $("pathMeta").textContent =
     `mode: ${d.paths.useMock ? "MOCK" : "LIVE"}\n` +
     `photos: ${d.paths.photoBackupRoot}\n` +
     `Site Memo: ${d.paths.siteMemoRoot}` +
-    (state.group ? `\ngroup: ${state.group}` : "");
+    (state.group ? `\ngroup: ${state.group}` : "") +
+    (err ? `\nERROR: ${err}` : "");
+  $("pathMeta").classList.toggle("error", Boolean(err));
 }
 
 function renderLocked() {
@@ -168,36 +183,61 @@ function updateFolderPreview() {
 }
 
 async function loadGroups() {
-  const data = await api("/api/groups");
-  state.groups = data.groups || [];
-  state.group =
-    data.defaultGroup ||
-    state.defaults?.paths?.defaultGroup ||
-    state.groups[0] ||
-    "";
-  renderGroups();
-  renderPathMeta();
-  if (state.group) await loadDays(state.group);
-  else {
+  try {
+    const data = await api("/api/groups");
+    state.browseError = null;
+    state.groups = data.groups || [];
+    state.group =
+      data.defaultGroup ||
+      state.defaults?.paths?.defaultGroup ||
+      state.groups[0] ||
+      "";
+    renderGroups();
+    renderPathMeta();
+    if (state.group) await loadDays(state.group);
+    else {
+      state.days = [];
+      state.day = "";
+      state.photos = [];
+      renderDays();
+      renderPhotos();
+    }
+  } catch (err) {
+    state.browseError = String(err.message || err);
+    state.groups = [];
+    state.group = "";
     state.days = [];
     state.day = "";
     state.photos = [];
+    renderGroups();
     renderDays();
     renderPhotos();
+    renderPathMeta();
   }
 }
 
 async function loadDays(group) {
   state.group = group;
-  const data = await api(`/api/days?group=${encodeURIComponent(group)}`);
-  state.days = data.days;
-  state.day = state.days[0] || "";
-  renderDays();
-  renderPathMeta();
-  if (state.day) await loadPhotos(group, state.day);
-  else {
+  try {
+    const data = await api(`/api/days?group=${encodeURIComponent(group)}`);
+    state.browseError = null;
+    state.days = data.days;
+    state.day = state.days[0] || "";
+    renderDays();
+    renderPathMeta();
+    if (state.day) await loadPhotos(group, state.day);
+    else {
+      state.photos = [];
+      renderPhotos();
+    }
+  } catch (err) {
+    state.browseError = String(err.message || err);
+    state.days = [];
+    state.day = "";
     state.photos = [];
+    renderDays();
     renderPhotos();
+    renderPathMeta();
   }
 }
 

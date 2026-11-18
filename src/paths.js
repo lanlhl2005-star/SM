@@ -28,15 +28,26 @@ export function assertGroupName(group) {
   return name;
 }
 
+/**
+ * Keep UNC roots intact. path.resolve() on non-Windows turns
+ * \\Server\Share\... into a junk path under cwd.
+ */
 export function photoBackupRootPath() {
-  return path.resolve(config.photoBackupRoot);
+  const raw = String(config.photoBackupRoot || "");
+  if (looksLikeUnc(raw)) {
+    return path.normalize(raw);
+  }
+  return path.resolve(raw);
 }
 
 export function groupPhotoRoot(group) {
   const name = assertGroupName(group);
   const root = photoBackupRootPath();
-  const full = path.resolve(root, name);
-  if (full !== root && !full.startsWith(root + path.sep)) {
+  const full = looksLikeUnc(root)
+    ? path.normalize(path.join(root, name))
+    : path.resolve(root, name);
+  const rootNorm = root.endsWith(path.sep) ? root.slice(0, -1) : root;
+  if (full !== rootNorm && !full.startsWith(rootNorm + path.sep)) {
     throw new Error(`Group path escapes backup root: ${group}`);
   }
   return full;
@@ -54,7 +65,18 @@ export function defaultPhotoGroup(groups = listPhotoGroups()) {
 
 function looksLikeUnc(p) {
   const s = String(p || "");
+  // UNC: \\server\share or //server/share (and JS strings that still have \\).
   return s.startsWith("\\\\") || s.startsWith("//");
+}
+
+/** Serialize fs failures for JSON APIs (UI shows code/errno). */
+export function fsErrorPayload(err) {
+  return {
+    error: String(err?.message || err),
+    code: err?.code || null,
+    errno: err?.errno ?? null,
+    path: err?.path || null,
+  };
 }
 
 export function ensureRoots() {
@@ -79,23 +101,86 @@ export function ensureRoots() {
   }
 }
 
+/**
+ * SMB / UNC shares often return Dirent with unknown type so isDirectory()
+ * is false even for real folders. Stat when the Dirent type is unreliable.
+ */
+function entryIsDirectory(parent, dirent) {
+  if (dirent.name === "." || dirent.name === "..") return false;
+  // Trust only a positive isDirectory(). On SMB/UNC, Dirent type is often
+  // unknown (all is*() false); junctions may look like symlinks — always stat.
+  try {
+    if (dirent.isDirectory()) return true;
+  } catch {
+    // Some platform Dirent helpers throw; fall through to stat.
+  }
+  try {
+    return fs.statSync(path.join(parent, dirent.name)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function entryIsFile(parent, dirent) {
+  try {
+    if (dirent.isFile()) return true;
+  } catch {
+    // fall through
+  }
+  try {
+    return fs.statSync(path.join(parent, dirent.name)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function formatFsError(action, target, err) {
+  const code = err?.code || err?.errno || "UNKNOWN";
+  const errno = err?.errno != null ? ` errno=${err.errno}` : "";
+  const msg = err?.message || String(err);
+  const wrapped = new Error(`${action} failed for ${target}: ${msg} [${code}${errno}]`);
+  wrapped.code = err?.code;
+  wrapped.errno = err?.errno;
+  wrapped.path = target;
+  wrapped.cause = err;
+  return wrapped;
+}
+
+function readDirents(dir, actionLabel) {
+  try {
+    fs.accessSync(dir, fs.constants.R_OK);
+  } catch (err) {
+    throw formatFsError(actionLabel, dir, err);
+  }
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    throw formatFsError(actionLabel, dir, err);
+  }
+}
+
+function compareGroupNames(a, b) {
+  // Keep Archived discoverable but out of the way.
+  if (a === "Archived" && b !== "Archived") return 1;
+  if (b === "Archived" && a !== "Archived") return -1;
+  return a.localeCompare(b, undefined, { sensitivity: "base" });
+}
+
 /** Top-level folders under Group_photo_backup (real group subjects + individual). */
 export function listPhotoGroups() {
   const root = photoBackupRootPath();
-  if (!fs.existsSync(root)) return [];
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && d.name !== "." && d.name !== "..")
+  const entries = readDirents(root, "listPhotoGroups");
+  return entries
+    .filter((d) => entryIsDirectory(root, d))
     .map((d) => d.name)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    .sort(compareGroupNames);
 }
 
 export function listDayFolders(group) {
   const root = groupPhotoRoot(group);
-  if (!fs.existsSync(root)) return [];
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && DAY_RE.test(d.name))
+  const entries = readDirents(root, "listDayFolders");
+  return entries
+    .filter((d) => entryIsDirectory(root, d) && DAY_RE.test(d.name))
     .map((d) => d.name)
     .sort()
     .reverse();
@@ -106,11 +191,20 @@ export function listPhotos(group, day) {
     throw new Error("Invalid day folder; expected YYYY-MM-DD");
   }
   const dir = path.join(groupPhotoRoot(group), day);
-  if (!fs.existsSync(dir)) return [];
+  let entries;
+  try {
+    entries = readDirents(dir, "listPhotos");
+  } catch (err) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
+  }
   const groupName = assertGroupName(group);
-  return fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isFile() && IMAGE_EXT.has(path.extname(d.name).toLowerCase()))
+  return entries
+    .filter(
+      (d) =>
+        entryIsFile(dir, d) &&
+        IMAGE_EXT.has(path.extname(d.name).toLowerCase())
+    )
     .map((d) => {
       const full = path.join(dir, d.name);
       const st = fs.statSync(full);
@@ -146,8 +240,11 @@ export function resolvePhotoPath(relativePath) {
   if (!DAY_RE.test(day)) {
     throw new Error(`Invalid day in photo path: ${relativePath}`);
   }
-  const full = path.resolve(root, cleaned);
-  if (full !== root && !full.startsWith(root + path.sep)) {
+  const full = looksLikeUnc(root)
+    ? path.normalize(path.join(root, ...parts))
+    : path.resolve(root, cleaned);
+  const rootNorm = root.endsWith(path.sep) ? root.slice(0, -1) : root;
+  if (full !== rootNorm && !full.startsWith(rootNorm + path.sep)) {
     throw new Error(`Photo path escapes backup root: ${relativePath}`);
   }
   if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
