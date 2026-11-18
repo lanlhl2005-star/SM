@@ -16,6 +16,7 @@ import {
   resolveFileStem,
 } from "./naming.js";
 import { downloadToFile } from "./session.js";
+import { moveFile } from "./move-file.js";
 import { createDownloadQueue } from "./download-queue.js";
 import { getProcessed, markProcessed, saveState } from "./state.js";
 import { touchHeartbeat } from "./heartbeat.js";
@@ -153,7 +154,9 @@ export function createPipeline({
           );
           finalAbs = path.join(destDir, name);
         }
-        fs.renameSync(tmpPath, finalAbs);
+        // Local tmp → UNC share is cross-device; moveFile falls back to
+        // copy-into-dest-.moving then rename within the share (avoids EXDEV).
+        await moveFile(tmpPath, finalAbs);
 
         markProcessed(state, msgKey, {
           status: "saved",
