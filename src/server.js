@@ -2,13 +2,16 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, siteMemoPhotoRoot } from "./config.js";
+import { config } from "./config.js";
 import { createDraftMemo } from "./create-draft.js";
 import { formatDocSeq, formatFolderNn, nextMemoSequence } from "./memo-number.js";
 import {
+  defaultPhotoGroup,
   ensureRoots,
   listDayFolders,
+  listPhotoGroups,
   listPhotos,
+  photoBackupRootPath,
   resolvePhotoPath,
 } from "./paths.js";
 
@@ -23,12 +26,15 @@ app.use(express.static(publicDir));
 
 app.get("/api/health", (_req, res) => {
   const seq = nextMemoSequence();
+  const groups = listPhotoGroups();
   res.json({
     ok: true,
     useMock: config.useMock,
     photoBackupRoot: config.photoBackupRoot,
     siteMemoRoot: config.siteMemoRoot,
-    photoGroup: config.photoGroup,
+    photoGroup: config.photoGroup || null,
+    defaultGroup: defaultPhotoGroup(groups),
+    groups,
     nextMemo: {
       folder_nn: formatFolderNn(seq),
       memo_number: formatDocSeq(seq),
@@ -36,18 +42,38 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.get("/api/days", (_req, res) => {
+app.get("/api/groups", (_req, res) => {
   try {
-    res.json({ days: listDayFolders(), root: siteMemoPhotoRoot() });
+    const groups = listPhotoGroups();
+    res.json({
+      groups,
+      root: photoBackupRootPath(),
+      defaultGroup: defaultPhotoGroup(groups),
+      preferredGroup: config.photoGroup || null,
+    });
   } catch (err) {
     res.status(500).json({ error: String(err.message || err) });
   }
 });
 
+app.get("/api/days", (req, res) => {
+  try {
+    const group = String(req.query.group || "");
+    res.json({
+      group,
+      days: listDayFolders(group),
+      root: path.join(photoBackupRootPath(), group),
+    });
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || err) });
+  }
+});
+
 app.get("/api/photos", (req, res) => {
   try {
+    const group = String(req.query.group || "");
     const day = String(req.query.day || "");
-    res.json({ day, photos: listPhotos(day) });
+    res.json({ group, day, photos: listPhotos(group, day) });
   } catch (err) {
     res.status(400).json({ error: String(err.message || err) });
   }
@@ -69,6 +95,7 @@ app.get("/api/defaults", (_req, res) => {
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const yyyy = today.getFullYear();
+  const groups = listPhotoGroups();
   res.json({
     projectLocked: config.projectLocked,
     date: `${dd}/${mm}/${yyyy}`,
@@ -82,6 +109,9 @@ app.get("/api/defaults", (_req, res) => {
       photoBackupRoot: config.photoBackupRoot,
       siteMemoRoot: config.siteMemoRoot,
       useMock: config.useMock,
+      preferredGroup: config.photoGroup || null,
+      defaultGroup: defaultPhotoGroup(groups),
+      groups,
     },
   });
 });
@@ -108,4 +138,9 @@ app.listen(config.port, config.host, () => {
   console.log(`  USE_MOCK=${config.useMock}`);
   console.log(`  photos: ${config.photoBackupRoot}`);
   console.log(`  site memos: ${config.siteMemoRoot}`);
+  const groups = listPhotoGroups();
+  console.log(
+    `  groups: ${groups.length ? groups.join(", ") : "(none yet)"}` +
+      (config.photoGroup ? ` (PHOTO_GROUP default=${config.photoGroup})` : "")
+  );
 });

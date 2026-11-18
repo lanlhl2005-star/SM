@@ -1,4 +1,6 @@
 const state = {
+  groups: [],
+  group: "",
   days: [],
   day: "",
   photos: [],
@@ -26,7 +28,8 @@ function renderPathMeta() {
   $("pathMeta").textContent =
     `mode: ${d.paths.useMock ? "MOCK" : "LIVE"}\n` +
     `photos: ${d.paths.photoBackupRoot}\n` +
-    `Site Memo: ${d.paths.siteMemoRoot}`;
+    `Site Memo: ${d.paths.siteMemoRoot}` +
+    (state.group ? `\ngroup: ${state.group}` : "");
 }
 
 function renderLocked() {
@@ -44,6 +47,25 @@ function escape(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function renderGroups() {
+  const sel = $("groupSelect");
+  sel.innerHTML = "";
+  if (!state.groups.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "(no group folders under Group_photo_backup)";
+    sel.appendChild(opt);
+    return;
+  }
+  for (const group of state.groups) {
+    const opt = document.createElement("option");
+    opt.value = group;
+    opt.textContent = group;
+    sel.appendChild(opt);
+  }
+  sel.value = state.group;
 }
 
 function renderDays() {
@@ -145,17 +167,46 @@ function updateFolderPreview() {
   $("folderPreview").textContent = `Will create: SM-${nn} ${short} (Draft)`;
 }
 
-async function loadDays() {
-  const data = await api("/api/days");
+async function loadGroups() {
+  const data = await api("/api/groups");
+  state.groups = data.groups || [];
+  state.group =
+    data.defaultGroup ||
+    state.defaults?.paths?.defaultGroup ||
+    state.groups[0] ||
+    "";
+  renderGroups();
+  renderPathMeta();
+  if (state.group) await loadDays(state.group);
+  else {
+    state.days = [];
+    state.day = "";
+    state.photos = [];
+    renderDays();
+    renderPhotos();
+  }
+}
+
+async function loadDays(group) {
+  state.group = group;
+  const data = await api(`/api/days?group=${encodeURIComponent(group)}`);
   state.days = data.days;
   state.day = state.days[0] || "";
   renderDays();
-  if (state.day) await loadPhotos(state.day);
+  renderPathMeta();
+  if (state.day) await loadPhotos(group, state.day);
+  else {
+    state.photos = [];
+    renderPhotos();
+  }
 }
 
-async function loadPhotos(day) {
+async function loadPhotos(group, day) {
+  state.group = group;
   state.day = day;
-  const data = await api(`/api/photos?day=${encodeURIComponent(day)}`);
+  const data = await api(
+    `/api/photos?group=${encodeURIComponent(group)}&day=${encodeURIComponent(day)}`
+  );
   state.photos = data.photos;
   renderPhotos();
 }
@@ -214,10 +265,13 @@ async function submit() {
   }
 }
 
-$("daySelect").addEventListener("change", (e) => loadPhotos(e.target.value));
+$("groupSelect").addEventListener("change", (e) => loadDays(e.target.value));
+$("daySelect").addEventListener("change", (e) =>
+  loadPhotos(state.group, e.target.value)
+);
 $("subject").addEventListener("input", updateFolderPreview);
 $("shortSubject").addEventListener("input", updateFolderPreview);
 $("submitBtn").addEventListener("click", submit);
 
 await loadDefaults();
-await loadDays();
+await loadGroups();

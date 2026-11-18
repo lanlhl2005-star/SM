@@ -2,7 +2,7 @@
 /**
  * Headless Draft create for smoke tests / automation.
  * Usage:
- *   node src/cli-draft.js --subject "Test diversion" --image 2026-11-18/IMG_chiller_plant.jpg
+ *   node src/cli-draft.js --subject "Test diversion" --image site-memo/2026-11-18/IMG_chiller_plant.jpg
  */
 import { createDraftMemo } from "./create-draft.js";
 import { config } from "./config.js";
@@ -26,7 +26,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 if (!args.subject || !args.images.length) {
   console.error(
-    "Required: --subject <text> --image <day/file> [--caption <text>] [--intro ...] [--bullet ...]"
+    "Required: --subject <text> --image <group/YYYY-MM-DD/file> [--caption <text>] [--intro ...] [--bullet ...]"
   );
   process.exit(1);
 }

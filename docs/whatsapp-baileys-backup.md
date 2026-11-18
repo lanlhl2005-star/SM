@@ -39,7 +39,7 @@ Folder naming (no keyword aliases):
 
 Illegal path characters (`<>:"/\|?*` and controls) are replaced; trailing dots/spaces stripped. There is **no** `site-memo` / `unmapped` alias map — the on-disk folder is the group title itself.
 
-For the Draft UI, set `PHOTO_GROUP` (or `config.photoGroup`) to the **same sanitized group title** as the site-memo WhatsApp group so browse targets the right tree.
+The Draft UI lists **all** top-level folders under `Group_photo_backup` (group subjects + `individual`). Optionally set `PHOTO_GROUP` to pre-select one folder when it exists; otherwise pick group → day → photos in the UI. On the Windows PC set `USE_MOCK=false` so browse uses the live UNC root.
 
 ---
 

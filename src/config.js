@@ -45,11 +45,20 @@ function expandWindowsEnv(input) {
   });
 }
 
-const useMock =
-  truthy(process.env.USE_MOCK) ||
-  (!process.env.PHOTO_BACKUP_ROOT &&
-    !process.env.SITE_MEMO_ROOT &&
-    !fs.existsSync(defaults.paths.siteMemoRoot));
+function falsy(v) {
+  if (v === undefined || v === null || v === "") return false;
+  return ["0", "false", "no", "off"].includes(String(v).toLowerCase());
+}
+
+// USE_MOCK=false always means live paths (even if UNC is unreachable here).
+// Auto-mock only when USE_MOCK is unset/empty and no backup/memo root is configured
+// or reachable — so cloud agents fall back to fixtures without blocking Windows live use.
+const useMock = falsy(process.env.USE_MOCK)
+  ? false
+  : truthy(process.env.USE_MOCK) ||
+    (!process.env.PHOTO_BACKUP_ROOT &&
+      !process.env.SITE_MEMO_ROOT &&
+      !fs.existsSync(defaults.paths.siteMemoRoot));
 
 const mockPhotoRoot = path.join(ROOT, "mock", "Group_photo_backup");
 const mockSiteMemoRoot = path.join(ROOT, "mock", "Site Memo");
@@ -77,7 +86,12 @@ export const config = {
   useMock,
   projectCode: defaults.projectCode,
   partyCode: defaults.partyCode,
-  photoGroup: process.env.PHOTO_GROUP || defaults.photoGroup,
+  // Optional default group selection for Draft UI (must match a top-level folder).
+  photoGroup: String(
+    process.env.PHOTO_GROUP !== undefined
+      ? process.env.PHOTO_GROUP
+      : defaults.photoGroup ?? ""
+  ).trim(),
   photoBackupRoot: process.env.PHOTO_BACKUP_ROOT
     ? process.env.PHOTO_BACKUP_ROOT
     : useMock
@@ -160,6 +174,8 @@ export const config = {
   },
 };
 
-export function siteMemoPhotoRoot() {
-  return path.join(config.photoBackupRoot, config.photoGroup);
+/** @deprecated Prefer listing groups under photoBackupRoot. */
+export function siteMemoPhotoRoot(group = config.photoGroup) {
+  if (group) return path.join(config.photoBackupRoot, group);
+  return config.photoBackupRoot;
 }

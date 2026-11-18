@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { config, siteMemoPhotoRoot } from "./config.js";
+import { config } from "./config.js";
 
 const IMAGE_EXT = new Set([
   ".jpg",
@@ -13,28 +13,79 @@ const IMAGE_EXT = new Set([
   ".tiff",
 ]);
 
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Reject path segments that could escape or nest unexpectedly. */
+export function assertGroupName(group) {
+  const name = String(group ?? "").trim();
+  if (!name) throw new Error("Group folder is required");
+  if (name === "." || name === "..") {
+    throw new Error(`Invalid group folder: ${group}`);
+  }
+  if (/[/\\]/.test(name) || name.includes("\0")) {
+    throw new Error(`Invalid group folder: ${group}`);
+  }
+  return name;
+}
+
+export function photoBackupRootPath() {
+  return path.resolve(config.photoBackupRoot);
+}
+
+export function groupPhotoRoot(group) {
+  const name = assertGroupName(group);
+  const root = photoBackupRootPath();
+  const full = path.resolve(root, name);
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error(`Group path escapes backup root: ${group}`);
+  }
+  return full;
+}
+
+/**
+ * Optional PHOTO_GROUP default when that folder exists under the backup root.
+ * Otherwise null (UI picks the first listed group).
+ */
+export function defaultPhotoGroup(groups = listPhotoGroups()) {
+  const preferred = String(config.photoGroup || "").trim();
+  if (preferred && groups.includes(preferred)) return preferred;
+  return groups[0] || null;
+}
+
 export function ensureRoots() {
-  fs.mkdirSync(siteMemoPhotoRoot(), { recursive: true });
+  fs.mkdirSync(photoBackupRootPath(), { recursive: true });
   fs.mkdirSync(config.siteMemoRoot, { recursive: true });
 }
 
-export function listDayFolders() {
-  const root = siteMemoPhotoRoot();
+/** Top-level folders under Group_photo_backup (real group subjects + individual). */
+export function listPhotoGroups() {
+  const root = photoBackupRootPath();
   if (!fs.existsSync(root)) return [];
   return fs
     .readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(d.name))
+    .filter((d) => d.isDirectory() && d.name !== "." && d.name !== "..")
+    .map((d) => d.name)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+export function listDayFolders(group) {
+  const root = groupPhotoRoot(group);
+  if (!fs.existsSync(root)) return [];
+  return fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && DAY_RE.test(d.name))
     .map((d) => d.name)
     .sort()
     .reverse();
 }
 
-export function listPhotos(day) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+export function listPhotos(group, day) {
+  if (!DAY_RE.test(day)) {
     throw new Error("Invalid day folder; expected YYYY-MM-DD");
   }
-  const dir = path.join(siteMemoPhotoRoot(), day);
+  const dir = path.join(groupPhotoRoot(group), day);
   if (!fs.existsSync(dir)) return [];
+  const groupName = assertGroupName(group);
   return fs
     .readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isFile() && IMAGE_EXT.has(path.extname(d.name).toLowerCase()))
@@ -42,9 +93,10 @@ export function listPhotos(day) {
       const full = path.join(dir, d.name);
       const st = fs.statSync(full);
       return {
+        group: groupName,
         day,
         name: d.name,
-        relativePath: path.join(day, d.name).replace(/\\/g, "/"),
+        relativePath: path.join(groupName, day, d.name).replace(/\\/g, "/"),
         size: st.size,
         mtime: st.mtime.toISOString(),
       };
@@ -52,12 +104,26 @@ export function listPhotos(day) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Resolve a photo relative path under site-memo backup; reject path escape. */
+/**
+ * Resolve a photo relative path under PHOTO_BACKUP_ROOT.
+ * Expected form: <group>/<YYYY-MM-DD>/<file>
+ */
 export function resolvePhotoPath(relativePath) {
-  const root = path.resolve(siteMemoPhotoRoot());
+  const root = photoBackupRootPath();
   const cleaned = String(relativePath || "")
     .replace(/\\/g, "/")
     .replace(/^\/+/, "");
+  const parts = cleaned.split("/").filter(Boolean);
+  if (parts.length < 3) {
+    throw new Error(
+      `Photo path must be group/YYYY-MM-DD/file (got: ${relativePath})`
+    );
+  }
+  const [group, day] = parts;
+  assertGroupName(group);
+  if (!DAY_RE.test(day)) {
+    throw new Error(`Invalid day in photo path: ${relativePath}`);
+  }
   const full = path.resolve(root, cleaned);
   if (full !== root && !full.startsWith(root + path.sep)) {
     throw new Error(`Photo path escapes backup root: ${relativePath}`);
@@ -69,6 +135,12 @@ export function resolvePhotoPath(relativePath) {
     throw new Error(`Not an image file: ${relativePath}`);
   }
   return full;
+}
+
+/** @deprecated Prefer groupPhotoRoot(group). Kept for older call sites. */
+export function siteMemoPhotoRoot(group = config.photoGroup) {
+  if (group) return groupPhotoRoot(group);
+  return photoBackupRootPath();
 }
 
 export function sanitizeShortSubject(subject) {
