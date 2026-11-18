@@ -43,7 +43,7 @@ Details: [docs/whatsapp-desktop-backup-watch.md](docs/whatsapp-desktop-backup-wa
 
 ### Point at the live shares
 
-Edit `.env` (or set environment variables). UNC works when the share is reachable; a mapped drive letter also works:
+Edit `.env` (or set environment variables). **`USE_MOCK=false` is required** on the Windows PC so the Draft UI reads the live backup root (not coloured mock samples). UNC works when the share is reachable; a mapped drive letter also works:
 
 ```env
 USE_MOCK=false
@@ -59,17 +59,21 @@ PHOTO_BACKUP_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_b
 SITE_MEMO_ROOT=S:\Sang\project\new project 2026\cmi 火炭 MVAC\Site Memo
 ```
 
+Optional: set `PHOTO_GROUP` to a top-level folder name under `Group_photo_backup` (live WhatsApp group subject, or `individual`) to pre-select it in the UI. Leave unset to pick from the folder list.
+
 Requires **Node.js 20.9+**.
 
 ## Mock / cloud fallback
 
-When `USE_MOCK=true` (default in the shipped `.env`) or the live UNC paths are unreachable, the app uses repo fixtures:
+When `USE_MOCK=true` (default in the shipped `.env.example`) — or when `USE_MOCK` is unset and no live roots are configured/reachable — the app uses repo fixtures:
 
 ```text
-mock/Group_photo_backup/site-memo/YYYY-MM-DD/   ← pick photos here
-mock/Site Memo/                                 ← Draft folders written here
-mock/WhatsAppDesktop/media/                     ← backup-watch source in mock mode
+mock/Group_photo_backup/<group>/YYYY-MM-DD/   ← group = subject folder or individual
+mock/Site Memo/                               ← Draft folders written here
+mock/WhatsAppDesktop/media/                   ← backup-watch source in mock mode
 ```
+
+`USE_MOCK=false` never auto-falls back to mock, even if the UNC path is unreachable from this machine.
 
 Smoke-test without the UI:
 
@@ -83,7 +87,7 @@ npm test
 
 ## UI flow
 
-1. Choose a **day folder** under `…\Group_photo_backup\<site-memo group name>\YYYY-MM-DD\` (set `PHOTO_GROUP` to that folder name).
+1. Choose a **group folder** under `…\Group_photo_backup\` (live WhatsApp group subject, or `individual`), then a **day** (`YYYY-MM-DD`).
 2. Click photos to build ordered **photo blocks** (1 image + 1 editable caption each).
 3. Fill **date**, **subject**, body intro/bullets; leave **Copy to** empty unless needed.
 4. **Create Draft .doc** → writes only:
@@ -106,10 +110,11 @@ The program **never** creates `(Submitted)` folders. After Word review, a human 
 
 ## Server paths (live)
 
-**Photo backup (browse):** folder name = WhatsApp group subject (not a fixed `site-memo` alias). Example:
+**Photo backup (browse):** every top-level folder under `Group_photo_backup` (Baileys uses the live WhatsApp group subject, or `individual` for 1:1). Example:
 
 ```text
 \\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\<group subject>\YYYY-MM-DD\
+\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\individual\YYYY-MM-DD\
 ```
 
 **Site Memo store (write Draft only):**
@@ -133,7 +138,7 @@ The program **never** creates `(Submitted)` folders. After Word review, a human 
 ## CLI
 
 ```bat
-npm run draft -- --subject "14F Diversion" --short "14F Diversion" --image 2026-11-18/IMG_stair_clash.jpg --caption "Photo of Steel stair"
+npm run draft -- --subject "14F Diversion" --short "14F Diversion" --image site-memo/2026-11-18/IMG_stair_clash.jpg --caption "Photo of Steel stair"
 ```
 
 ## License / ownership

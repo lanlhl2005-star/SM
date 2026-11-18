@@ -19,11 +19,15 @@
     <section class="panel" aria-labelledby="browse-heading">
       <h2 id="browse-heading">1. Browse photos</h2>
       <label class="field">
-        <span>Day folder (PHOTO_GROUP / YYYY-MM-DD)</span>
+        <span>Group folder (WhatsApp subject or individual)</span>
+        <select id="groupSelect"></select>
+      </label>
+      <label class="field">
+        <span>Day folder (YYYY-MM-DD)</span>
         <select id="daySelect"></select>
       </label>
       <div id="photoGrid" class="photo-grid"></div>
-      <p class="hint">Click a photo to add it as a photo block. Order below = order in the memo.</p>
+      <p class="hint">Pick a backup group, then a day. Click a photo to add it as a photo block. Order below = order in the memo.</p>
     </section>
 
     <section class="panel" aria-labelledby="blocks-heading">

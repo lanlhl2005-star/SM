@@ -11,7 +11,7 @@ Related: `docs/site-memo-template-spec.md`, `docs/site-memo-field-map.json`, and
 **Goals**
 
 - Personal WhatsApp number joins **several** project groups (site memo, material delivery, internal communication, BIM coordination, etc.) and backs up photos from each to the server under per-group folders with **required** `YYYY-MM-DD` day folders (separate from the Site Memo store).
-- Site-memo UI: browse the **site-memo** photo backup → select photos → group into `photo_blocks` → type captions → submit.
+- Site-memo UI: browse **any** `Group_photo_backup` group folder → select photos → group into `photo_blocks` → type captions → submit.
 - On submit, the program creates **Draft only**: next per-memo folder `SM-{nn} … (Draft)` under the live Site Memo root and an unlocked `.doc` inside for Word review. It never marks folders `(Submitted)`.
 - Project-locked From/To/Company/signatory; bump `SM-xxx` only (no Rn); N photo groups → N bordered captioned tables.
 
@@ -112,14 +112,16 @@ Do **not** build Cloud API webhooks or bot listeners in this phase.
 
 ## 4. UI flow (site-memo generate)
 
-Defaults to **`Group_photo_backup\site-memo\` only**. Other group backups are not shown in this UI unless a future option is added.
+Lists **all** top-level folders under `Group_photo_backup` (live WhatsApp group subjects + `individual`). Optional `PHOTO_GROUP` pre-selects a folder when it exists.
 
-1. **Browse** `\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\site-memo\YYYY-MM-DD\` (show thumbnails + filename/date).
+1. **Choose group**, then **day** under `\\Server\Share\Sang\project\new project 2026\cmi 火炭 MVAC\Group_photo_backup\<group>\YYYY-MM-DD\` (thumbnails + filename/date).
 2. **Select** the photos needed for this memo.
 3. **Group** selections into ordered `photo_blocks` (default: one image per block; order = memo table order).
 4. **Caption** each block (plain text; editable again later in Word).
 5. **Fill** per-memo text: date, subject (also drives short folder title), body intro/items; leave Copy to empty unless needed. From/To/etc. stay project defaults.
 6. **Submit** → program creates **only** `SM-{nn} {short subject} (Draft)` under the Site Memo UNC root → write unlocked `.doc` into that folder (never `(Submitted)`).
+
+On the Windows PC: `USE_MOCK=false` in `.env`, then `git pull` and restart `npm start`.
 
 ---
 
@@ -131,7 +133,7 @@ UI submit payload (logical fields):
 | --- | --- |
 | **Project-locked (fixed)** | `from_name`, `to_names`, `company`, `our_ref_prefix`, `project_title`, `signatory_name`, `signatory_title`, `ref_initials` |
 | **Per memo (from UI)** | `date` (`DD/MM/YYYY`), `memo_number` (auto-bump from last `SM-{nn}` folder), `copy_to` (default empty), `subject`, `body_intro`, `body_items` |
-| **Photos** | `photo_blocks[]`: each `{ image: <path under site-memo backup>, caption: <string> }` |
+| **Photos** | `photo_blocks[]`: each `{ image: <group/YYYY-MM-DD/file under backup root>, caption: <string> }` |
 
 Generator behavior (per template spec / field map):
 
