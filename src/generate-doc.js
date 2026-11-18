@@ -11,8 +11,17 @@ const FONT_CSS =
   "font-family:Calibri;mso-ascii-font-family:Calibri;mso-fareast-font-family:PMingLiU;mso-hansi-font-family:Calibri;mso-bidi-font-family:Arial";
 const FONT_SIZE = "12.0pt";
 const BOUNDARY = "----=_NextPart_SiteMemo_LK";
+/** HTML root label — Word resolves relative img src against this directory. */
 const HTML_LOC = "file:///C:/SiteMemo/SiteMemo.htm";
-const ASSET_DIR = "file:///C:/SiteMemo/SiteMemo_files";
+/** Absolute Content-Location prefix for image MIME parts (Word MHTML style). */
+const ASSET_DIR_ABS = "file:///C:/SiteMemo/SiteMemo_files";
+/**
+ * Relative path prefix used in HTML/VML src. Must resolve against HTML_LOC to
+ * the same URI as each image part's Content-Location. Word desktop embeds via
+ * Content-Location matching — not cid: (email-oriented) and not absolute
+ * file:/// img src (treated as dead disk links).
+ */
+const ASSET_DIR_REL = "SiteMemo_files";
 const CID_DOMAIN = "sitememo.lk";
 
 function escapeHtml(s) {
@@ -58,12 +67,16 @@ function p(styleExtra, inner) {
   return `<p class="MsoNormal" style='${style}'>${inner}</p>`;
 }
 
-function cidRef(contentId) {
-  return `cid:${contentId}`;
-}
-
 function makeContentId(name) {
   return `${name}@${CID_DOMAIN}`;
+}
+
+function relativeAssetRef(name) {
+  return `${ASSET_DIR_REL}/${name}`;
+}
+
+function absoluteAssetLoc(name) {
+  return `${ASSET_DIR_ABS}/${name}`;
 }
 
 /**
@@ -91,21 +104,42 @@ export function extractLetterheadPngFromTemplate(templatePath = config.templateD
 }
 
 /**
- * SM-005 / template photo table: 1 col × 2 rows, BorderStyle.Single / 0.5pt.
- * Images referenced by cid: (Content-ID), never file:/// or data: URIs —
- * Word treats absolute file:/// img src as external links (dead on open).
+ * Word-native embedded image: VML imagedata (Print/layout) + fallback <img>.
+ * Both use relative SiteMemo_files/... paths that match Content-Location parts.
+ * o:href keeps a cid: secondary for agents that prefer Content-ID.
  */
-function photoTableHtml(imgSrc, caption, index) {
+function embeddedImageHtml({ relSrc, cid, widthPx, alt, shapeId }) {
+  const widthPt = Math.round(widthPx * 0.75 * 100) / 100;
+  const safeAlt = escapeHtml(alt);
+  return `<!--[if gte vml 1]><v:shape id="${shapeId}" type="#_x0000_t75" alt="${safeAlt}"
+ style='width:${widthPt}pt' o:allowoverlap="f">
+ <v:imagedata src="${relSrc}" o:href="cid:${cid}" o:title="${safeAlt}"/>
+</v:shape><![endif]--><![if !vml]><img width="${widthPx}" src="${relSrc}"
+ alt="${safeAlt}" style='width:${widthPx}px;max-width:100%;height:auto;'
+ v:shapes="${shapeId}"/><![endif]>`;
+}
+
+/**
+ * SM-005 / template photo table: 1 col × 2 rows, BorderStyle.Single / 0.5pt.
+ * Images use relative SiteMemo_files/ refs (Word Content-Location embeds).
+ */
+function photoTableHtml(imgMeta, caption, index) {
   const cell =
     "border:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;padding:4.0pt 4.0pt 4.0pt 4.0pt";
+  const image = embeddedImageHtml({
+    relSrc: imgMeta.relSrc,
+    cid: imgMeta.cid,
+    widthPx: 520,
+    alt: `photo ${index + 1}`,
+    shapeId: `_x0000_i${1026 + index}`,
+  });
   return `
 <table class="MsoNormalTable photo-block" border="1" cellspacing="0" cellpadding="0"
   style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;width:100%;margin:10.0pt 0;'>
   <tr>
     <td valign="top" style='width:100%;${cell}'>
       <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>
-        <img src="${imgSrc}" alt="photo ${index + 1}" width="520"
-          style='width:520px;max-width:100%;height:auto;'/>
+        ${image}
       </p>
     </td>
   </tr>
@@ -174,12 +208,12 @@ function bodyHtml(payload) {
 }
 
 /**
- * Build Word-openable HTML body (no MIME wrapper). Image srcs must be cid:
- * URLs that match Content-ID headers on MHTML parts (not file:/// paths).
+ * Build Word-openable HTML body (no MIME wrapper). Image srcs must be relative
+ * SiteMemo_files/... paths that match Content-Location on MHTML parts.
  */
 export function buildSiteMemoHtml(payload, assetUrls) {
   const locked = config.projectLocked;
-  const letterheadSrc = assetUrls.letterhead;
+  const letterhead = assetUrls.letterhead;
   const photoSrcs = assetUrls.photos || [];
   const copyTo = payload.copy_to ?? "";
 
@@ -187,6 +221,14 @@ export function buildSiteMemoHtml(payload, assetUrls) {
   const photosHtml = photoBlocks
     .map((block, i) => photoTableHtml(photoSrcs[i], block.caption || "", i))
     .join("\n");
+
+  const letterheadHtml = embeddedImageHtml({
+    relSrc: letterhead.relSrc,
+    cid: letterhead.cid,
+    widthPx: 640,
+    alt: "Lap Kei Engineering letterhead",
+    shapeId: "_x0000_i1025",
+  });
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
 xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -207,6 +249,33 @@ xmlns="http://www.w3.org/TR/REC-html40">
     <w:Zoom>100</w:Zoom>
     <w:DoNotOptimizeForBrowser/>
   </w:WordDocument>
+</xml>
+<![endif]-->
+<!--[if gte vml 1]>
+<xml>
+  <o:shapelayout v:ext="edit">
+   <o:idmap v:ext="edit" data="1"/>
+  </o:shapelayout>
+  <v:shapetype id="_x0000_t75" coordsize="21600,21600" o:spt="75"
+   o:preferrelative="t" path="m@4@5l@4@11@9@11@9@5xe" filled="f" stroked="f">
+   <v:stroke joinstyle="miter"/>
+   <v:formulas>
+    <v:f eqn="if lineDrawn pixelLineWidth 0"/>
+    <v:f eqn="sum @0 1 0"/>
+    <v:f eqn="sum 0 0 @1"/>
+    <v:f eqn="prod @2 1 2"/>
+    <v:f eqn="prod @3 21600 pixelWidth"/>
+    <v:f eqn="prod @3 21600 pixelHeight"/>
+    <v:f eqn="sum @0 0 1"/>
+    <v:f eqn="prod @6 1 2"/>
+    <v:f eqn="prod @7 21600 pixelWidth"/>
+    <v:f eqn="sum @8 21600 0"/>
+    <v:f eqn="prod @7 21600 pixelHeight"/>
+    <v:f eqn="sum @10 21600 0"/>
+   </v:formulas>
+   <v:path o:extrusionok="f" gradientshapeok="t" o:connecttype="rect"/>
+   <o:lock v:ext="edit" aspectratio="t"/>
+  </v:shapetype>
 </xml>
 <![endif]-->
 <style>
@@ -237,8 +306,7 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <div class="Section1">
 
 <p class="MsoNormal" align="center" style='text-align:center;margin:0;'>
-  <img width="640" src="${letterheadSrc}" alt="Lap Kei Engineering letterhead"
-    style='width:640px;max-width:100%;height:auto;'/>
+  ${letterheadHtml}
 </p>
 
 <p class="MsoNormal" align="center" style='${FONT_CSS};font-size:14.0pt;font-weight:bold;text-align:center;margin:8.0pt 0 10.0pt 0;'>Site Memo</p>
@@ -290,8 +358,9 @@ function mimePart({ contentLocation, contentId, contentType, transferEncoding, b
 
 /**
  * Pack HTML + binary images as Word-compatible MHTML saved with a `.doc`
- * extension. Images use Content-ID / cid: so Word embeds them instead of
- * following dead file:/// links.
+ * extension. Images are referenced by relative SiteMemo_files/ paths that
+ * match each part's Content-Location (Word's native MHTML embedding).
+ * Content-ID / cid: is retained only as a secondary VML o:href label.
  *
  * Letterhead bytes come from the PNG already inside site-memo-template.doc —
  * not from docs/site-memo-assets/lap-kei-letterhead.png.
@@ -300,7 +369,8 @@ export function buildSiteMemoMhtml(payload) {
   const letterheadBuf = extractLetterheadPngFromTemplate(config.templateDoc);
   const letterheadName = "letterhead.png";
   const letterheadCid = makeContentId(letterheadName);
-  const letterheadLoc = `${ASSET_DIR}/${letterheadName}`;
+  const letterheadRel = relativeAssetRef(letterheadName);
+  const letterheadLoc = absoluteAssetLoc(letterheadName);
 
   const photoBlocks = Array.isArray(payload.photo_blocks) ? payload.photo_blocks : [];
   const photoAssets = photoBlocks.map((block, i) => {
@@ -309,7 +379,8 @@ export function buildSiteMemoMhtml(payload) {
     const name = `photo${i}${extForMime(mime)}`;
     return {
       name,
-      loc: `${ASSET_DIR}/${name}`,
+      relSrc: relativeAssetRef(name),
+      loc: absoluteAssetLoc(name),
       cid: makeContentId(name),
       mime,
       buf: fs.readFileSync(filePath),
@@ -317,8 +388,8 @@ export function buildSiteMemoMhtml(payload) {
   });
 
   const html = buildSiteMemoHtml(payload, {
-    letterhead: cidRef(letterheadCid),
-    photos: photoAssets.map((a) => cidRef(a.cid)),
+    letterhead: { relSrc: letterheadRel, cid: letterheadCid },
+    photos: photoAssets.map((a) => ({ relSrc: a.relSrc, cid: a.cid })),
   });
 
   const parts = [];
@@ -331,7 +402,7 @@ export function buildSiteMemoMhtml(payload) {
       body: wrapBase64(Buffer.from(html, "utf8").toString("base64")),
     })
   );
-  // Letterhead: template-sourced PNG, cid-addressable (not a site photo block).
+  // Letterhead: template-sourced PNG, Content-Location embedded (not a site photo).
   parts.push(
     mimePart({
       contentLocation: letterheadLoc,
@@ -360,6 +431,132 @@ export function buildSiteMemoMhtml(payload) {
   ].join("\r\n");
 
   return `${header}${parts.join("\r\n")}\r\n--${BOUNDARY}--\r\n`;
+}
+
+/**
+ * Parse MHTML image parts and verify each HTML/VML image ref resolves to a
+ * base64 part with valid image magic bytes. Used by tests / smoke checks.
+ */
+export function verifyMhtmlImageEmbeds(mhtml) {
+  const boundaryRe = new RegExp(
+    `^--${BOUNDARY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?\\r?\\n`,
+    "m"
+  );
+  const rawParts = mhtml.split(boundaryRe).slice(1);
+  const imageParts = new Map();
+  let html = null;
+
+  for (const raw of rawParts) {
+    if (!raw.trim() || raw.startsWith("--")) continue;
+    const sep = raw.indexOf("\r\n\r\n");
+    if (sep < 0) continue;
+    const headers = raw.slice(0, sep);
+    const body = raw.slice(sep + 4).replace(/\r\n--[\s\S]*$/, "").trim();
+    const locMatch = headers.match(/Content-Location:\s*(\S+)/i);
+    const typeMatch = headers.match(/Content-Type:\s*([^\r\n;]+)/i);
+    const encMatch = headers.match(/Content-Transfer-Encoding:\s*(\S+)/i);
+    const loc = locMatch ? locMatch[1] : "";
+    const type = typeMatch ? typeMatch[1].trim().toLowerCase() : "";
+    const enc = encMatch ? encMatch[1].toLowerCase() : "";
+    if (type.startsWith("text/html")) {
+      const bytes =
+        enc === "base64"
+          ? Buffer.from(body.replace(/\r?\n/g, ""), "base64")
+          : Buffer.from(body, "utf8");
+      html = bytes.toString("utf8");
+      continue;
+    }
+    if (!type.startsWith("image/")) continue;
+    const bytes =
+      enc === "base64"
+        ? Buffer.from(body.replace(/\r?\n/g, ""), "base64")
+        : Buffer.from(body, "binary");
+    const name = loc.split("/").pop();
+    imageParts.set(loc, { type, bytes, name });
+    if (name) imageParts.set(`${ASSET_DIR_REL}/${name}`, { type, bytes, name });
+  }
+
+  if (!html) {
+    throw new Error("MHTML missing HTML root part");
+  }
+
+  const refs = [
+    ...html.matchAll(/(?:src|o:href)=["']([^"']+)["']/gi),
+  ].map((m) => m[1]);
+
+  const imageRefs = refs.filter(
+    (r) =>
+      r.includes("SiteMemo_files/") ||
+      r.startsWith("cid:") ||
+      r.startsWith("file:") ||
+      r.startsWith("data:")
+  );
+
+  if (imageRefs.length === 0) {
+    throw new Error("HTML has no image references");
+  }
+
+  const problems = [];
+  for (const ref of imageRefs) {
+    if (ref.startsWith("file:")) {
+      problems.push(`absolute file URL in markup (dead disk link): ${ref}`);
+      continue;
+    }
+    if (ref.startsWith("data:")) {
+      problems.push(`data: URI in markup (Word truncates): ${ref.slice(0, 32)}…`);
+      continue;
+    }
+    if (ref.startsWith("cid:")) {
+      // Secondary VML o:href only — primary src must still be relative.
+      continue;
+    }
+    if (!ref.startsWith(`${ASSET_DIR_REL}/`)) {
+      problems.push(`unexpected image ref (want ${ASSET_DIR_REL}/…): ${ref}`);
+      continue;
+    }
+    const part =
+      imageParts.get(ref) ||
+      imageParts.get(`${ASSET_DIR_ABS}/${ref.slice(ASSET_DIR_REL.length + 1)}`);
+    if (!part) {
+      problems.push(`no MIME part for ${ref}`);
+      continue;
+    }
+    if (part.bytes.length < 32) {
+      problems.push(`image part too small for ${ref}: ${part.bytes.length} bytes`);
+      continue;
+    }
+    const isPng =
+      part.bytes[0] === 0x89 &&
+      part.bytes[1] === 0x50 &&
+      part.bytes[2] === 0x4e &&
+      part.bytes[3] === 0x47;
+    const isJpeg = part.bytes[0] === 0xff && part.bytes[1] === 0xd8;
+    const isGif =
+      part.bytes[0] === 0x47 && part.bytes[1] === 0x49 && part.bytes[2] === 0x46;
+    if (!isPng && !isJpeg && !isGif) {
+      problems.push(`bad image magic for ${ref}`);
+    }
+  }
+
+  // Primary <img src> / v:imagedata src must be relative (not cid:/file:).
+  const primarySrcs = [
+    ...html.matchAll(/<(?:img|v:imagedata)\b[^>]*?\bsrc=["']([^"']+)["']/gi),
+  ].map((m) => m[1]);
+  for (const src of primarySrcs) {
+    if (!src.startsWith(`${ASSET_DIR_REL}/`)) {
+      problems.push(`primary src must be relative ${ASSET_DIR_REL}/…, got ${src}`);
+    }
+  }
+
+  if (problems.length) {
+    throw new Error(`MHTML image embed check failed:\n- ${problems.join("\n- ")}`);
+  }
+
+  return {
+    html,
+    imagePartCount: [...imageParts.keys()].filter((k) => k.startsWith("file:")).length,
+    primarySrcs,
+  };
 }
 
 export function writeSiteMemoDoc(outPath, payload) {

@@ -8,6 +8,7 @@ import { createDraftMemo } from "../src/create-draft.js";
 import {
   buildSiteMemoMhtml,
   extractLetterheadPngFromTemplate,
+  verifyMhtmlImageEmbeds,
   writeSiteMemoDoc,
 } from "../src/generate-doc.js";
 import { config } from "../src/config.js";
@@ -48,7 +49,7 @@ describe("generate-doc MHTML site memo", () => {
     assert.ok(fs.existsSync(config.templateDoc));
   });
 
-  it("emits Calibri 12, underlined Project/Subject, cid photos, and sign-off", () => {
+  it("emits Calibri 12, underlined Project/Subject, Content-Location photos, and sign-off", () => {
     const photoPath = mockPhoto("site-memo/2026-11-18/IMG_chiller_plant.jpg");
     const payload = {
       date: "18/11/2026",
@@ -108,23 +109,40 @@ describe("generate-doc MHTML site memo", () => {
     assert.match(html, /- Temporary storage area at L1/);
     assert.doesNotMatch(html, /<ul[\s>]/);
 
-    // Photo tables Single / 0.5 — cid: embeds, not file:/// (dead links in Word)
+    // Photo tables Single / 0.5 — relative SiteMemo_files embeds (Word Content-Location)
     assert.match(html, /class="MsoNormalTable photo-block"/);
     assert.match(html, /mso-border-alt:solid windowtext \.5pt/);
     assert.match(html, /Photo of 14\/F Chiller Plant/);
-    assert.match(html, /src="cid:photo0\.jpg@sitememo\.lk"/);
-    assert.match(html, /src="cid:photo1\.jpg@sitememo\.lk"/);
-    assert.match(html, /src="cid:letterhead\.png@sitememo\.lk"/);
+    assert.match(html, /src="SiteMemo_files\/photo0\.jpg"/);
+    assert.match(html, /src="SiteMemo_files\/photo1\.jpg"/);
+    assert.match(html, /src="SiteMemo_files\/letterhead\.png"/);
+    assert.match(html, /v:imagedata[^>]*src="SiteMemo_files\/letterhead\.png"/);
     assert.doesNotMatch(
       html,
-      /src="file:\/\//,
-      "img src must not use file:/// (Word opens as dead external links)"
+      /(?:src|o:href)="file:\/\//,
+      "markup must not use absolute file:/// (Word opens as dead external links)"
     );
+    // Primary src must not be cid: — Word desktop MHTML uses Content-Location.
+    assert.doesNotMatch(html, /<(?:img|v:imagedata)\b[^>]*\bsrc="cid:/i);
 
-    // MIME parts carry Content-ID matching cid: refs
+    // MIME parts carry Content-Location matching relative HTML refs
+    assert.match(
+      mhtml,
+      /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo0\.jpg/
+    );
+    assert.match(
+      mhtml,
+      /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/letterhead\.png/
+    );
     assert.match(mhtml, /Content-ID: <photo0\.jpg@sitememo\.lk>/);
-    assert.match(mhtml, /Content-ID: <photo1\.jpg@sitememo\.lk>/);
     assert.match(mhtml, /Content-ID: <letterhead\.png@sitememo\.lk>/);
+
+    // Embed integrity: parts exist, magic bytes OK, HTML refs resolve
+    const verified = verifyMhtmlImageEmbeds(mhtml);
+    assert.equal(verified.imagePartCount, 3);
+    assert.ok(verified.primarySrcs.includes("SiteMemo_files/letterhead.png"));
+    assert.ok(verified.primarySrcs.includes("SiteMemo_files/photo0.jpg"));
+    assert.ok(verified.primarySrcs.includes("SiteMemo_files/photo1.jpg"));
 
     // Sign-off after photos
     assert.match(html, /Yours faithfully,/);
@@ -138,7 +156,7 @@ describe("generate-doc MHTML site memo", () => {
       "sign-off must follow photo tables"
     );
 
-    // Two photo parts + letterhead Content-Location retained as secondary labels.
+    // Two photo parts + letterhead Content-Location.
     const photoParts = [
       ...mhtml.matchAll(
         /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo\d+\./g
@@ -159,8 +177,9 @@ describe("generate-doc MHTML site memo", () => {
     const writtenHtml = decodeHtmlPart(written);
     assert.match(writtenHtml, /Yours faithfully,/);
     assert.match(writtenHtml, /Photo of 14\/F Chiller Plant/);
-    assert.match(writtenHtml, /cid:photo0\.jpg@sitememo\.lk/);
-    assert.doesNotMatch(writtenHtml, /src="file:\/\//);
+    assert.match(writtenHtml, /src="SiteMemo_files\/photo0\.jpg"/);
+    assert.doesNotMatch(writtenHtml, /(?:src|o:href)="file:\/\//);
+    verifyMhtmlImageEmbeds(written);
   });
 
   it("createDraftMemo embeds selected photo_blocks and closing", () => {
@@ -182,14 +201,55 @@ describe("generate-doc MHTML site memo", () => {
     const text = fs.readFileSync(result.file_path, "utf8");
     assert.match(text, /MIME-Version/);
     assert.match(text, /photo0\.jpg/);
-    assert.match(text, /Content-ID: <photo0\.jpg@sitememo\.lk>/);
+    assert.match(
+      text,
+      /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo0\.jpg/
+    );
     assert.doesNotMatch(text, /data:image\//);
     const html = decodeHtmlPart(text);
     assert.match(html, /Yours faithfully,/);
     assert.match(html, /Delivery Note/);
     assert.match(html, /<u><b>Subject:<\/b><\/u>/);
     assert.match(html, /mso-ascii-font-family:Calibri/);
-    assert.match(html, /cid:photo0\.jpg@sitememo\.lk/);
-    assert.doesNotMatch(html, /src="file:\/\//);
+    assert.match(html, /src="SiteMemo_files\/photo0\.jpg"/);
+    assert.doesNotMatch(html, /(?:src|o:href)="file:\/\//);
+    verifyMhtmlImageEmbeds(text);
+  });
+
+  it("rejects SM-008-style cid-primary markup in verifier", () => {
+    // Mimic broken PR #14 pattern: cid: primary src with matching Content-ID.
+    const fake = [
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/related; boundary="----=_NextPart_SiteMemo_LK"; type="text/html"`,
+      "",
+      "------=_NextPart_SiteMemo_LK",
+      "Content-Location: file:///C:/SiteMemo/SiteMemo.htm",
+      'Content-Transfer-Encoding: base64',
+      'Content-Type: text/html; charset="utf-8"',
+      "",
+      Buffer.from(
+        '<html><img src="cid:letterhead.png@sitememo.lk"/></html>',
+        "utf8"
+      )
+        .toString("base64")
+        .match(/.{1,76}/g)
+        .join("\r\n"),
+      "------=_NextPart_SiteMemo_LK",
+      "Content-Location: file:///C:/SiteMemo/SiteMemo_files/letterhead.png",
+      "Content-ID: <letterhead.png@sitememo.lk>",
+      "Content-Transfer-Encoding: base64",
+      "Content-Type: image/png",
+      "",
+      // Minimal valid-ish PNG header bytes as base64 (not a full PNG — magic check)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        .toString("base64"),
+      "------=_NextPart_SiteMemo_LK--",
+      "",
+    ].join("\r\n");
+
+    assert.throws(
+      () => verifyMhtmlImageEmbeds(fake),
+      /primary src must be relative/
+    );
   });
 });
