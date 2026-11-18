@@ -5,7 +5,11 @@ import path from "node:path";
 import { describe, it, after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createDraftMemo } from "../src/create-draft.js";
-import { buildSiteMemoMhtml, writeSiteMemoDoc } from "../src/generate-doc.js";
+import {
+  buildSiteMemoMhtml,
+  extractLetterheadPngFromTemplate,
+  writeSiteMemoDoc,
+} from "../src/generate-doc.js";
 import { config } from "../src/config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,7 +39,16 @@ describe("generate-doc MHTML site memo", () => {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
-  it("emits Calibri 12, underlined Project/Subject, bordered photos, and sign-off", () => {
+  it("extracts letterhead PNG from site-memo-template.doc (not side asset path)", () => {
+    const fromTemplate = extractLetterheadPngFromTemplate(config.templateDoc);
+    assert.equal(fromTemplate[0], 0x89);
+    assert.equal(fromTemplate[1], 0x50);
+    assert.ok(fromTemplate.length > 10_000, "letterhead PNG should be substantial");
+    // Generator must not require the side asset file for letterhead bytes.
+    assert.ok(fs.existsSync(config.templateDoc));
+  });
+
+  it("emits Calibri 12, underlined Project/Subject, cid photos, and sign-off", () => {
     const photoPath = mockPhoto("site-memo/2026-11-18/IMG_chiller_plant.jpg");
     const payload = {
       date: "18/11/2026",
@@ -61,6 +74,7 @@ describe("generate-doc MHTML site memo", () => {
     const mhtml = buildSiteMemoMhtml(payload);
     assert.match(mhtml, /^MIME-Version: 1\.0/);
     assert.match(mhtml, /multipart\/related/);
+    assert.match(mhtml, /type="text\/html"/);
     assert.doesNotMatch(mhtml, /data:image\//, "must not use data: URIs (Word truncates)");
 
     const html = decodeHtmlPart(mhtml);
@@ -94,10 +108,23 @@ describe("generate-doc MHTML site memo", () => {
     assert.match(html, /- Temporary storage area at L1/);
     assert.doesNotMatch(html, /<ul[\s>]/);
 
-    // Photo tables Single / 0.5
+    // Photo tables Single / 0.5 — cid: embeds, not file:/// (dead links in Word)
     assert.match(html, /class="MsoNormalTable photo-block"/);
     assert.match(html, /mso-border-alt:solid windowtext \.5pt/);
     assert.match(html, /Photo of 14\/F Chiller Plant/);
+    assert.match(html, /src="cid:photo0\.jpg@sitememo\.lk"/);
+    assert.match(html, /src="cid:photo1\.jpg@sitememo\.lk"/);
+    assert.match(html, /src="cid:letterhead\.png@sitememo\.lk"/);
+    assert.doesNotMatch(
+      html,
+      /src="file:\/\//,
+      "img src must not use file:/// (Word opens as dead external links)"
+    );
+
+    // MIME parts carry Content-ID matching cid: refs
+    assert.match(mhtml, /Content-ID: <photo0\.jpg@sitememo\.lk>/);
+    assert.match(mhtml, /Content-ID: <photo1\.jpg@sitememo\.lk>/);
+    assert.match(mhtml, /Content-ID: <letterhead\.png@sitememo\.lk>/);
 
     // Sign-off after photos
     assert.match(html, /Yours faithfully,/);
@@ -111,7 +138,7 @@ describe("generate-doc MHTML site memo", () => {
       "sign-off must follow photo tables"
     );
 
-    // Two photo parts + letterhead.
+    // Two photo parts + letterhead Content-Location retained as secondary labels.
     const photoParts = [
       ...mhtml.matchAll(
         /Content-Location: file:\/\/\/C:\/SiteMemo\/SiteMemo_files\/photo\d+\./g
@@ -132,6 +159,8 @@ describe("generate-doc MHTML site memo", () => {
     const writtenHtml = decodeHtmlPart(written);
     assert.match(writtenHtml, /Yours faithfully,/);
     assert.match(writtenHtml, /Photo of 14\/F Chiller Plant/);
+    assert.match(writtenHtml, /cid:photo0\.jpg@sitememo\.lk/);
+    assert.doesNotMatch(writtenHtml, /src="file:\/\//);
   });
 
   it("createDraftMemo embeds selected photo_blocks and closing", () => {
@@ -153,11 +182,14 @@ describe("generate-doc MHTML site memo", () => {
     const text = fs.readFileSync(result.file_path, "utf8");
     assert.match(text, /MIME-Version/);
     assert.match(text, /photo0\.jpg/);
+    assert.match(text, /Content-ID: <photo0\.jpg@sitememo\.lk>/);
     assert.doesNotMatch(text, /data:image\//);
     const html = decodeHtmlPart(text);
     assert.match(html, /Yours faithfully,/);
     assert.match(html, /Delivery Note/);
     assert.match(html, /<u><b>Subject:<\/b><\/u>/);
     assert.match(html, /mso-ascii-font-family:Calibri/);
+    assert.match(html, /cid:photo0\.jpg@sitememo\.lk/);
+    assert.doesNotMatch(html, /src="file:\/\//);
   });
 });

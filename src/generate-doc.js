@@ -13,6 +13,7 @@ const FONT_SIZE = "12.0pt";
 const BOUNDARY = "----=_NextPart_SiteMemo_LK";
 const HTML_LOC = "file:///C:/SiteMemo/SiteMemo.htm";
 const ASSET_DIR = "file:///C:/SiteMemo/SiteMemo_files";
+const CID_DOMAIN = "sitememo.lk";
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -57,9 +58,42 @@ function p(styleExtra, inner) {
   return `<p class="MsoNormal" style='${style}'>${inner}</p>`;
 }
 
+function cidRef(contentId) {
+  return `cid:${contentId}`;
+}
+
+function makeContentId(name) {
+  return `${name}@${CID_DOMAIN}`;
+}
+
+/**
+ * Pull the letterhead PNG already stored inside site-memo-template.doc
+ * (OLE Data stream). Do not use docs/site-memo-assets/lap-kei-letterhead.png
+ * as a separate header asset — the template is the source of truth.
+ */
+export function extractLetterheadPngFromTemplate(templatePath = config.templateDoc) {
+  const buf = fs.readFileSync(templatePath);
+  const pngSig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const start = buf.indexOf(pngSig);
+  if (start < 0) {
+    throw new Error(
+      `No PNG letterhead found inside template: ${templatePath}`
+    );
+  }
+  const iend = buf.indexOf(Buffer.from("IEND"), start);
+  if (iend < 0) {
+    throw new Error(
+      `Truncated PNG letterhead inside template: ${templatePath}`
+    );
+  }
+  // IEND + CRC (4 bytes)
+  return buf.subarray(start, iend + 8);
+}
+
 /**
  * SM-005 / template photo table: 1 col × 2 rows, BorderStyle.Single / 0.5pt.
- * Images referenced by Content-Location (MHTML parts), never data: URIs.
+ * Images referenced by cid: (Content-ID), never file:/// or data: URIs —
+ * Word treats absolute file:/// img src as external links (dead on open).
  */
 function photoTableHtml(imgSrc, caption, index) {
   const cell =
@@ -140,8 +174,8 @@ function bodyHtml(payload) {
 }
 
 /**
- * Build Word-openable HTML body (no MIME wrapper). Image srcs must be
- * Content-Location URLs that match MHTML parts.
+ * Build Word-openable HTML body (no MIME wrapper). Image srcs must be cid:
+ * URLs that match Content-ID headers on MHTML parts (not file:/// paths).
  */
 export function buildSiteMemoHtml(payload, assetUrls) {
   const locked = config.projectLocked;
@@ -156,6 +190,7 @@ export function buildSiteMemoHtml(payload, assetUrls) {
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
 xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns:v="urn:schemas-microsoft-com:vml"
 xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -195,6 +230,7 @@ xmlns="http://www.w3.org/TR/REC-html40">
     mso-fareast-language: ZH-TW;
   }
   span.zh { font-family: PMingLiU; mso-fareast-font-family: PMingLiU; font-size: 10.0pt; }
+  img { border: 0; }
 </style>
 </head>
 <body lang="EN-US" style='tab-interval:36.0pt'>
@@ -235,54 +271,71 @@ ${p("margin:6.0pt 0 0 0;font-size:10.0pt;", escapeHtml(locked.ref_initials))}
 `;
 }
 
-function mimePart({ contentLocation, contentType, transferEncoding, body }) {
-  return [
-    `--${BOUNDARY}`,
-    `Content-Location: ${contentLocation}`,
+function mimePart({ contentLocation, contentId, contentType, transferEncoding, body }) {
+  const lines = [`--${BOUNDARY}`];
+  if (contentLocation) {
+    lines.push(`Content-Location: ${contentLocation}`);
+  }
+  if (contentId) {
+    lines.push(`Content-ID: <${contentId}>`);
+  }
+  lines.push(
     `Content-Transfer-Encoding: ${transferEncoding}`,
     `Content-Type: ${contentType}`,
     "",
-    body,
-  ].join("\r\n");
+    body
+  );
+  return lines.join("\r\n");
 }
 
 /**
  * Pack HTML + binary images as Word-compatible MHTML saved with a `.doc`
- * extension (same approach Word uses for single-file HTML with images).
+ * extension. Images use Content-ID / cid: so Word embeds them instead of
+ * following dead file:/// links.
+ *
+ * Letterhead bytes come from the PNG already inside site-memo-template.doc —
+ * not from docs/site-memo-assets/lap-kei-letterhead.png.
  */
 export function buildSiteMemoMhtml(payload) {
-  const letterheadBuf = fs.readFileSync(config.letterhead);
-  const letterheadLoc = `${ASSET_DIR}/letterhead.png`;
+  const letterheadBuf = extractLetterheadPngFromTemplate(config.templateDoc);
+  const letterheadName = "letterhead.png";
+  const letterheadCid = makeContentId(letterheadName);
+  const letterheadLoc = `${ASSET_DIR}/${letterheadName}`;
 
   const photoBlocks = Array.isArray(payload.photo_blocks) ? payload.photo_blocks : [];
   const photoAssets = photoBlocks.map((block, i) => {
     const filePath = block.absolutePath;
     const mime = mimeFor(filePath);
-    const loc = `${ASSET_DIR}/photo${i}${extForMime(mime)}`;
+    const name = `photo${i}${extForMime(mime)}`;
     return {
-      loc,
+      name,
+      loc: `${ASSET_DIR}/${name}`,
+      cid: makeContentId(name),
       mime,
       buf: fs.readFileSync(filePath),
     };
   });
 
   const html = buildSiteMemoHtml(payload, {
-    letterhead: letterheadLoc,
-    photos: photoAssets.map((a) => a.loc),
+    letterhead: cidRef(letterheadCid),
+    photos: photoAssets.map((a) => cidRef(a.cid)),
   });
 
   const parts = [];
   parts.push(
     mimePart({
       contentLocation: HTML_LOC,
+      contentId: makeContentId("SiteMemo.htm"),
       contentType: 'text/html; charset="utf-8"',
       transferEncoding: "base64",
       body: wrapBase64(Buffer.from(html, "utf8").toString("base64")),
     })
   );
+  // Letterhead: template-sourced PNG, cid-addressable (not a site photo block).
   parts.push(
     mimePart({
       contentLocation: letterheadLoc,
+      contentId: letterheadCid,
       contentType: "image/png",
       transferEncoding: "base64",
       body: wrapBase64(letterheadBuf.toString("base64")),
@@ -292,6 +345,7 @@ export function buildSiteMemoMhtml(payload) {
     parts.push(
       mimePart({
         contentLocation: asset.loc,
+        contentId: asset.cid,
         contentType: asset.mime,
         transferEncoding: "base64",
         body: wrapBase64(asset.buf.toString("base64")),
@@ -301,7 +355,7 @@ export function buildSiteMemoMhtml(payload) {
 
   const header = [
     "MIME-Version: 1.0",
-    `Content-Type: multipart/related; boundary="${BOUNDARY}"`,
+    `Content-Type: multipart/related; boundary="${BOUNDARY}"; type="text/html"`,
     "",
   ].join("\r\n");
 
