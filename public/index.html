@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Site Memo Draft</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Site Memo Draft</h1>
+      <p class="sub">LK-P01043 — pick photos → caption → generate unlocked <code>.doc</code></p>
+    </div>
+    <div class="path-meta" id="pathMeta">Loading paths…</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel" aria-labelledby="browse-heading">
+      <h2 id="browse-heading">1. Browse photos</h2>
+      <label class="field">
+        <span>Day folder (site-memo / YYYY-MM-DD)</span>
+        <select id="daySelect"></select>
+      </label>
+      <div id="photoGrid" class="photo-grid"></div>
+      <p class="hint">Click a photo to add it as a photo block. Order below = order in the memo.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="blocks-heading">
+      <h2 id="blocks-heading">2. Photo blocks</h2>
+      <div id="blocks" class="blocks"></div>
+      <p id="blocksEmpty" class="hint">No photos selected yet.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="fields-heading">
+      <h2 id="fields-heading">3. Memo fields</h2>
+      <div class="locked" id="lockedFields"></div>
+      <div class="grid-2">
+        <label class="field">
+          <span>Date (DD/MM/YYYY)</span>
+          <input id="date" type="text" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Next number</span>
+          <input id="memoNumber" type="text" readonly />
+        </label>
+      </div>
+      <label class="field">
+        <span>Subject</span>
+        <input id="subject" type="text" placeholder="e.g. Notice of chilled water pipe delivery" />
+      </label>
+      <label class="field">
+        <span>Short folder title (optional)</span>
+        <input id="shortSubject" type="text" placeholder="Defaults from subject; used in SM-nn folder name" />
+      </label>
+      <label class="field">
+        <span>Copy to (optional, usually empty)</span>
+        <input id="copyTo" type="text" />
+      </label>
+      <label class="field">
+        <span>Body intro</span>
+        <textarea id="bodyIntro" rows="3" placeholder="Opening paragraph…"></textarea>
+      </label>
+      <label class="field">
+        <span>Body bullets (one per line)</span>
+        <textarea id="bodyBullets" rows="4" placeholder="Bullet one&#10;Bullet two"></textarea>
+      </label>
+      <p class="folder-preview" id="folderPreview"></p>
+      <div class="actions">
+        <button type="button" id="submitBtn" class="primary">Create Draft .doc</button>
+      </div>
+      <pre id="result" class="result" hidden></pre>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

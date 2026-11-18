@@ -1,0 +1,24 @@
+{
+  "projectCode": "LK-P01043",
+  "partyCode": "LK",
+  "photoGroup": "site-memo",
+  "paths": {
+    "photoBackupRoot": "\\\\Server\\Share\\Sang\\project\\new project 2026\\cmi 火炭 MVAC\\Group_photo_backup",
+    "siteMemoRoot": "\\\\Server\\Share\\Sang\\project\\new project 2026\\cmi 火炭 MVAC\\Site Memo"
+  },
+  "projectLocked": {
+    "from_name": "Mr. Howard Chan",
+    "to_names": "Mr. Mr.Y.T. Huang /Benny Cheung",
+    "company": "Huawei International Co. Limited",
+    "our_ref_prefix": "LK/P01043/SM/",
+    "project_title": "Framework Procurement Project For Phase 2 Expansion of The Second Data Center In GUANGDONG-Hong Kong- Macao Greater Bay Area (Hong Kong )",
+    "signatory_name": "KS Ho",
+    "signatory_title": "Senior Technical Manager",
+    "ref_initials": "KS/hc/yc",
+    "closing_company": "Lap Kei Engineering Co., Ltd."
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 3847
+  }
+}

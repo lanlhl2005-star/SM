@@ -10,3 +10,6 @@ build/
 .vscode/
 *.tmp
 *.temp
+
+# Generated Drafts under mock Site Memo (keep seed Submitted folders)
+mock/Site Memo/SM-* (Draft)/
