@@ -100,10 +100,11 @@ Practical options that fit **manual drop** (pick one primary; others as fallback
 
 | Option | How | Fit |
 | --- | --- | --- |
-| **A. Export chat media** | Export that group’s chat **with media**, unzip/copy images into that day’s folder under the group. | Best occasional batch |
-| **B. Desktop WhatsApp + copy** | Open the group in WhatsApp Desktop; save/download images into that day’s folder under the group. | Good for frequent drops |
-| **C. Shared sync folder** | Colleagues save photos from a group into a share that mirrors `Group_photo_backup\<group>\YYYY-MM-DD\`. | Good if everyone already uses a share |
-| **D. Desktop media watcher** | Run `npm run backup-watch` on the PC with WhatsApp Desktop; new images in the Desktop media cache are copied into `Group_photo_backup\<group>\YYYY-MM-DD\`. Group attribution is **best-effort** (cache often omits chat id → `unmapped` fallback). See `docs/whatsapp-desktop-backup-watch.md`. | Good for continuous backup without Cloud API |
+| **A. Baileys linked device (primary)** | On a Windows PC: `npm run wa-link` once (spare Linked devices slot), then `npm run wa-backup`. Incoming group photos → `Group_photo_backup\<group>\YYYY-MM-DD\` by WhatsApp group subject. Phone/Desktop daily use undisturbed. **Do not** QR-link from cloud. See `docs/whatsapp-baileys-backup.md`. | Preferred continuous backup |
+| **B. Export chat media** | Export that group’s chat **with media**, unzip/copy images into that day’s folder under the group. | Best occasional batch |
+| **C. Desktop WhatsApp + copy** | Open the group in WhatsApp Desktop; save/download images into that day’s folder under the group. | Good for frequent drops |
+| **D. Shared sync folder** | Colleagues save photos from a group into a share that mirrors `Group_photo_backup\<group>\YYYY-MM-DD\`. | Good if everyone already uses a share |
+| **E. Desktop media watcher (deprecated fallback)** | Run `npm run backup-watch` on the PC with WhatsApp Desktop; fragile when media root missing; group attribution best-effort. See `docs/whatsapp-desktop-backup-watch.md`. | Fallback only |
 
 **Operating habit**
 

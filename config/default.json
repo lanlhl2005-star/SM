@@ -22,6 +22,7 @@
     "port": 3847
   },
   "whatsappDesktop": {
+    "deprecated": true,
     "mediaRootHint": "%LOCALAPPDATA%\\Packages\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\\LocalState\\shared\\transfers",
     "pollIntervalMs": 5000,
     "stableMs": 1500,
@@ -43,6 +44,31 @@
       "bim-coordination": {
         "matchNames": ["bim", "bim coordination", "BIM coordination", "BIM"],
         "pathIncludes": ["bim-coordination", "bim"]
+      }
+    }
+  },
+  "whatsappBaileys": {
+    "authDir": ".wa-auth",
+    "stateFile": ".wa-backup-state.json",
+    "heartbeatPath": ".wa-backup-heartbeat.json",
+    "tmpDir": ".wa-backup-tmp",
+    "timezone": "Asia/Hong_Kong",
+    "mediaTypes": ["image"],
+    "maxConcurrentDownloads": 2,
+    "heartbeatStaleMs": 120000,
+    "fallbackGroup": "unmapped",
+    "groupMap": {
+      "site-memo": {
+        "matchNames": ["site memo", "site-memo", "Site Memo"]
+      },
+      "material-delivery": {
+        "matchNames": ["material delivery", "material-delivery", "Material Delivery"]
+      },
+      "internal": {
+        "matchNames": ["internal", "internal communication", "Internal"]
+      },
+      "bim-coordination": {
+        "matchNames": ["bim", "bim coordination", "BIM coordination", "BIM"]
       }
     }
   }

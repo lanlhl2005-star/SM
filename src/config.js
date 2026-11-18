@@ -56,6 +56,7 @@ const mockSiteMemoRoot = path.join(ROOT, "mock", "Site Memo");
 const mockWaDesktopRoot = path.join(ROOT, "mock", "WhatsAppDesktop", "media");
 
 const waDefaults = defaults.whatsappDesktop || {};
+const baileysDefaults = defaults.whatsappBaileys || {};
 
 function resolveWaDesktopMediaRoot() {
   if (process.env.WA_DESKTOP_MEDIA_ROOT) {
@@ -63,6 +64,12 @@ function resolveWaDesktopMediaRoot() {
   }
   if (useMock) return mockWaDesktopRoot;
   return expandWindowsEnv(waDefaults.mediaRootHint || "");
+}
+
+function resolveMaybeRelative(p, fallback) {
+  const value = p || fallback;
+  if (!value) return value;
+  return path.isAbsolute(value) ? value : path.resolve(ROOT, value);
 }
 
 export const config = {
@@ -93,6 +100,7 @@ export const config = {
   ),
   fieldMap: path.join(ROOT, "docs", "site-memo-field-map.json"),
   whatsappDesktop: {
+    deprecated: waDefaults.deprecated !== false,
     mediaRoot: resolveWaDesktopMediaRoot(),
     mediaRootHint: waDefaults.mediaRootHint,
     pollIntervalMs: Number(
@@ -114,6 +122,43 @@ export const config = {
     stateFile: process.env.WA_WATCH_STATE_FILE
       ? expandWindowsEnv(process.env.WA_WATCH_STATE_FILE)
       : path.join(ROOT, ".backup-watch-state.json"),
+  },
+  whatsappBaileys: {
+    authDir: resolveMaybeRelative(
+      process.env.WA_AUTH_DIR || baileysDefaults.authDir,
+      ".wa-auth"
+    ),
+    stateFile: resolveMaybeRelative(
+      process.env.WA_BACKUP_STATE_FILE || baileysDefaults.stateFile,
+      ".wa-backup-state.json"
+    ),
+    heartbeatPath: resolveMaybeRelative(
+      process.env.WA_BACKUP_HEARTBEAT || baileysDefaults.heartbeatPath,
+      ".wa-backup-heartbeat.json"
+    ),
+    tmpDir: resolveMaybeRelative(
+      process.env.WA_BACKUP_TMP || baileysDefaults.tmpDir,
+      ".wa-backup-tmp"
+    ),
+    timezone: process.env.WA_BACKUP_TZ || baileysDefaults.timezone || "Asia/Hong_Kong",
+    mediaTypes: baileysDefaults.mediaTypes || ["image"],
+    maxConcurrentDownloads: Number(
+      process.env.WA_BACKUP_CONCURRENCY ||
+        baileysDefaults.maxConcurrentDownloads ||
+        2
+    ),
+    heartbeatStaleMs: Number(
+      process.env.WA_BACKUP_HEARTBEAT_STALE_MS ||
+        baileysDefaults.heartbeatStaleMs ||
+        120000
+    ),
+    fallbackGroup:
+      process.env.WA_FALLBACK_GROUP ||
+      baileysDefaults.fallbackGroup ||
+      waDefaults.fallbackGroup ||
+      "unmapped",
+    // Prefer Baileys groupMap; fall back to Desktop aliases so one edit covers both.
+    groupMap: baileysDefaults.groupMap || waDefaults.groupMap || {},
   },
 };
 

@@ -1,10 +1,12 @@
-# WhatsApp Desktop photo backup watcher
+# WhatsApp Desktop photo backup watcher (optional / deprecated)
 
-Path **2** for LK-P01043: a personal WhatsApp number stays in several project groups; **WhatsApp Desktop** on a Windows PC receives the media; this watcher copies new images into the server backup tree used by the Site Memo Draft UI.
+> **Prefer Baileys linked-device backup:** [`docs/whatsapp-baileys-backup.md`](whatsapp-baileys-backup.md) (`npm run wa-link` / `npm run wa-backup`). Desktop cache watching is fragile when the media root is missing or files are opaque hashes; keep this path only as a fallback.
+
+Path **2** (legacy) for LK-P01043: a personal WhatsApp number stays in several project groups; **WhatsApp Desktop** on a Windows PC receives the media; this watcher copies new images into the server backup tree used by the Site Memo Draft UI.
 
 **Not** WhatsApp Cloud / Business API. **No** auto-send back into WhatsApp.
 
-Related: `docs/whatsapp-manual-intake-plan.md`, `README.md`, `config/default.json`.
+Related: `docs/whatsapp-baileys-backup.md`, `docs/whatsapp-manual-intake-plan.md`, `README.md`, `config/default.json`.
 
 ---
 
