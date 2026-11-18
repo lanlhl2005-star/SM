@@ -20,5 +20,30 @@
   "server": {
     "host": "127.0.0.1",
     "port": 3847
+  },
+  "whatsappDesktop": {
+    "mediaRootHint": "%LOCALAPPDATA%\\Packages\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\\LocalState\\shared\\transfers",
+    "pollIntervalMs": 5000,
+    "stableMs": 1500,
+    "fallbackGroup": "unmapped",
+    "imageExtensions": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"],
+    "groupMap": {
+      "site-memo": {
+        "matchNames": ["site memo", "site-memo", "Site Memo"],
+        "pathIncludes": ["site-memo", "site memo"]
+      },
+      "material-delivery": {
+        "matchNames": ["material delivery", "material-delivery", "Material Delivery"],
+        "pathIncludes": ["material-delivery", "material delivery"]
+      },
+      "internal": {
+        "matchNames": ["internal", "internal communication", "Internal"],
+        "pathIncludes": ["internal"]
+      },
+      "bim-coordination": {
+        "matchNames": ["bim", "bim coordination", "BIM coordination", "BIM"],
+        "pathIncludes": ["bim-coordination", "bim"]
+      }
+    }
   }
 }

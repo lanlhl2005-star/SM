@@ -2,7 +2,7 @@
 
 Local web UI for **LK-P01043** site memos: browse WhatsApp group photo backups, group photos into ordered `photo_blocks` with captions, fill date/subject/body, and write an unlocked editable **Draft** `.doc` under the Site Memo share.
 
-Send-to-WhatsApp is **out of scope** (on hold).
+Optional **WhatsApp Desktop** watcher copies new photos from the Desktop media cache into `Group_photo_backup\<group>\YYYY-MM-DD\` (same share the UI reads). Send-to-WhatsApp is **out of scope** (on hold).
 
 ## Quick start (Windows colleagues)
 
@@ -15,6 +15,28 @@ npm start
 ```
 
 Open **http://127.0.0.1:3847** in a browser.
+
+### Photo backup watcher (WhatsApp Desktop)
+
+In a second terminal (or as a logged-on Windows service / Task Scheduler job):
+
+```bat
+npm run backup-watch
+```
+
+One-shot scan:
+
+```bat
+npm run backup-watch:once
+```
+
+Point `WA_DESKTOP_MEDIA_ROOT` at the Desktop media cache (typical Store path):
+
+```text
+%LOCALAPPDATA%\Packages\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\LocalState\shared\transfers
+```
+
+Uses the same `PHOTO_BACKUP_ROOT` / `USE_MOCK` as the Draft UI. Details and group-mapping limits: [docs/whatsapp-desktop-backup-watch.md](docs/whatsapp-desktop-backup-watch.md).
 
 ### Point at the live shares
 
@@ -43,12 +65,14 @@ When `USE_MOCK=true` (default in the shipped `.env`) or the live UNC paths are u
 ```text
 mock/Group_photo_backup/site-memo/YYYY-MM-DD/   ← pick photos here
 mock/Site Memo/                                 ← Draft folders written here
+mock/WhatsAppDesktop/media/                     ← backup-watch source in mock mode
 ```
 
 Smoke-test without the UI:
 
 ```bat
 npm run smoke
+npm run smoke:backup
 ```
 
 ## UI flow
@@ -93,6 +117,7 @@ The program **never** creates `(Submitted)` folders. After Word review, a human 
 | Doc | Purpose |
 | --- | --- |
 | [docs/whatsapp-manual-intake-plan.md](docs/whatsapp-manual-intake-plan.md) | Manual WA backup → UI → Draft `.doc` |
+| [docs/whatsapp-desktop-backup-watch.md](docs/whatsapp-desktop-backup-watch.md) | Desktop media watcher, Windows paths, group-map limits |
 | [docs/site-memo-template-spec.md](docs/site-memo-template-spec.md) | Template structure & photo-block rules |
 | [docs/site-memo-field-map.json](docs/site-memo-field-map.json) | Machine-readable field map |
 | [docs/site-memo-template.doc](docs/site-memo-template.doc) | Blank `.doc` template (SM-005 styling) |
