@@ -137,7 +137,7 @@ Restart the daemon after every pull so it picks up code changes (auth under `.wa
 | Symptom | Fix |
 | --- | --- |
 | `EXDEV: cross-device link not permitted` when saving to a UNC `PHOTO_BACKUP_ROOT` | Fixed in current tree: media is moved with rename, falling back to copy-then-unlink across devices. `git pull` and restart `npm.cmd run wa-backup`. |
-| `ERR_UNC_HOST_NOT_ALLOWED` / `UNC host 'server' access is not allowed` while PowerShell `Get-ChildItem` on the same UNC works | Node UNC host restriction (not a missing share). `npm start` / `npm run wa-backup` set `NODE_UNC_HOST_ALLOWLIST` via `scripts/run-with-unc.mjs` from the UNC host in `PHOTO_BACKUP_ROOT` / `SITE_MEMO_ROOT` (default `Server`). `git pull` and restart. Manual: `set NODE_UNC_HOST_ALLOWLIST=Server` before starting Node. |
+| `ERR_UNC_HOST_NOT_ALLOWED` / `UNC host 'server' access is not allowed` while PowerShell `Get-ChildItem` on the same UNC works | That error code is from **Electron/Cursor-patched** Node, not official `C:\Program Files\nodejs` (stock Node ignores `NODE_UNC_HOST_ALLOWLIST`). Reliable fix: `net use S: \\Server\Share`, set `SHARE_DRIVE=S:` (or `PHOTO_BACKUP_ROOT` / `SITE_MEMO_ROOT` under `S:\...`), `git pull`, restart. The app also auto-rewrites UNC → mapped drive when `SHARE_DRIVE` or `net use` already maps the share. |
 | Chinese path segments (e.g. `火炭`) look garbled in the console | Usually console code-page mojibake only. Paths are UTF-16 JS strings and are written correctly on the share — check Explorer, not the terminal glyphs. |
 
 ---
