@@ -1,0 +1,12 @@
+{
+  "name": "site-memo",
+  "version": "0.0.1",
+  "private": true,
+  "description": "LK-P01043 Site Memo: WhatsApp photo intake → Draft editable .doc generation",
+  "scripts": {
+    "test": "echo \"No tests yet\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
