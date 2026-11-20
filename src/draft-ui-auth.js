@@ -100,18 +100,49 @@ export function loginPageHtml(errorMessage = "") {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Site Memo Draft — Login</title>
   <style>
     :root { color-scheme: light; --ink: #1a1a1a; --muted: #5a5a5a; --line: #c8c8c8; --bg: #f6f4f0; --err: #8b1a1a; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: "Segoe UI", Tahoma, sans-serif; background: linear-gradient(160deg, #ebe6de 0%, #f6f4f0 45%, #e2e8e4 100%); color: var(--ink); }
-    main { width: min(22rem, calc(100% - 2rem)); padding: 1.5rem 1.4rem 1.6rem; border: 1px solid var(--line); background: rgba(255,255,255,0.92); }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: linear-gradient(160deg, #ebe6de 0%, #f6f4f0 45%, #e2e8e4 100%);
+      color: var(--ink);
+    }
+    main { width: min(22rem, 100%); padding: 1.5rem 1.4rem 1.6rem; border: 1px solid var(--line); background: rgba(255,255,255,0.92); border-radius: 10px; }
     h1 { margin: 0 0 0.35rem; font-size: 1.25rem; font-weight: 650; }
     p.sub { margin: 0 0 1.1rem; color: var(--muted); font-size: 0.9rem; line-height: 1.35; }
     label { display: block; font-size: 0.85rem; margin-bottom: 0.35rem; }
-    input[type="password"] { width: 100%; padding: 0.55rem 0.65rem; border: 1px solid var(--line); font: inherit; }
-    button { margin-top: 0.9rem; width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #333; background: #222; color: #fff; font: inherit; cursor: pointer; }
+    input[type="password"] {
+      width: 100%;
+      min-height: 2.75rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: inherit;
+      font-size: 1rem;
+    }
+    button {
+      margin-top: 0.9rem;
+      width: 100%;
+      min-height: 2.85rem;
+      padding: 0.7rem 0.85rem;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #222;
+      color: #fff;
+      font: inherit;
+      font-size: 1rem;
+      cursor: pointer;
+    }
     button:hover { background: #000; }
     .err { margin: 0 0 0.85rem; color: var(--err); font-size: 0.9rem; }
   </style>

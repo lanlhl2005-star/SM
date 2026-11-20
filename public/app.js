@@ -525,7 +525,29 @@ function bindGuideFieldHovers(root) {
   });
 }
 
+/**
+ * Desktop (≥768px): guide open by default. Phone: collapsed (still expandable).
+ * Inline script in index.html applies this before paint; this keeps app.js in sync.
+ */
+function syncGuideOpenForViewport() {
+  const guide = $("memoGuide");
+  if (!guide || guide.dataset.userToggled === "1") return;
+  guide.open = window.matchMedia("(min-width: 768px)").matches;
+}
+
 function initMemoGuide() {
+  const guide = $("memoGuide");
+  if (guide) {
+    syncGuideOpenForViewport();
+    const summary = guide.querySelector("summary");
+    summary?.addEventListener("click", () => {
+      // After the browser toggles open, remember the user chose explicitly.
+      queueMicrotask(() => {
+        guide.dataset.userToggled = "1";
+      });
+    });
+  }
+
   const figure = $("memoGuideFigure");
   if (!figure) return;
 
