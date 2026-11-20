@@ -51,6 +51,7 @@ export function extensionFromMeta({ mimetype, fileName, mediaType } = {}) {
   }
   if (mediaType === "image") return ".jpg";
   if (mediaType === "video") return ".mp4";
+  if (mediaType === "pdf") return ".pdf";
   if (mediaType === "document") return ".bin";
   return ".bin";
 }

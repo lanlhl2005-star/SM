@@ -53,7 +53,7 @@
     "heartbeatPath": ".wa-backup-heartbeat.json",
     "tmpDir": ".wa-backup-tmp",
     "timezone": "Asia/Hong_Kong",
-    "mediaTypes": ["image"],
+    "mediaTypes": ["image", "pdf"],
     "maxConcurrentDownloads": 2,
     "heartbeatStaleMs": 120000,
     "individualFolder": "individual"

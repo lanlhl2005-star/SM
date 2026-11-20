@@ -1,5 +1,5 @@
 /**
- * Classify Baileys message content. Site Memo backup saves images by default.
+ * Classify Baileys message content. Site Memo backup saves images + PDFs by default.
  * Patterns adapted from whatsapp-media-saver.
  */
 
@@ -27,6 +27,28 @@ export function unwrapMessage(message) {
   return message;
 }
 
+/** True when a Baileys documentMessage (or meta) is a PDF. */
+export function isPdfDocument(content) {
+  if (!content || typeof content !== "object") return false;
+  const mime = String(content.mimetype || content.mimeType || "").toLowerCase();
+  if (mime === "application/pdf" || mime.includes("pdf")) return true;
+  const name = content.fileName || content.filename || "";
+  return /\.pdf$/i.test(String(name));
+}
+
+/**
+ * Plain text body from a text-class message (conversation / extendedText).
+ */
+export function extractTextBody(content) {
+  if (!content || typeof content !== "object") return null;
+  if (typeof content.conversation === "string" && content.conversation.trim()) {
+    return content.conversation.trim();
+  }
+  const ext = content.extendedTextMessage?.text;
+  if (typeof ext === "string" && ext.trim()) return ext.trim();
+  return null;
+}
+
 /**
  * @returns {{ kind: string, content: object|null, contentType: string|null }}
  */
@@ -49,9 +71,17 @@ export function classifyMessage(message) {
     };
   }
   if (inner.documentMessage) {
+    const doc = inner.documentMessage;
+    if (isPdfDocument(doc)) {
+      return {
+        kind: "pdf",
+        content: doc,
+        contentType: "documentMessage",
+      };
+    }
     return {
       kind: "document",
-      content: inner.documentMessage,
+      content: doc,
       contentType: "documentMessage",
     };
   }
@@ -76,8 +106,8 @@ export function classifyMessage(message) {
   return { kind: "other", content: inner, contentType: null };
 }
 
-export function shouldSaveMediaKind(kind, allowed = ["image"]) {
-  const allow = new Set(allowed?.length ? allowed : ["image"]);
+export function shouldSaveMediaKind(kind, allowed = ["image", "pdf"]) {
+  const allow = new Set(allowed?.length ? allowed : ["image", "pdf"]);
   return allow.has(kind);
 }
 

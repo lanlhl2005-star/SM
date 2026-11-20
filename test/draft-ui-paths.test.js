@@ -47,6 +47,25 @@ test("listDayFolders / listPhotos use group then day", () => {
   assert.match(photos[0].relativePath, /^site-memo\/2026-11-18\//);
 });
 
+test("listPhotos includes PDFs with tags and filters by sender/caption", () => {
+  const all = listPhotos("site-memo", "2026-11-18");
+  const pdf = all.find((p) => p.name === "sample_delivery.pdf");
+  assert.ok(pdf, "expected sample_delivery.pdf in browse list");
+  assert.equal(pdf.mediaType, "pdf");
+  assert.equal(pdf.pickable, false);
+  assert.equal(pdf.tags?.sender, "85291234567");
+  assert.match(pdf.tags?.caption || "", /delivery/i);
+
+  const bySender = listPhotos("site-memo", "2026-11-18", {
+    sender: "85291234567",
+  });
+  assert.ok(bySender.some((p) => p.name === "sample_delivery.pdf"));
+  assert.ok(bySender.every((p) => (p.tags?.sender || "").includes("85291234567")));
+
+  const byText = listPhotos("site-memo", "2026-11-18", { text: "delivery" });
+  assert.ok(byText.some((p) => p.name === "sample_delivery.pdf"));
+});
+
 test("listDayFolders for Chinese group only returns YYYY-MM-DD", () => {
   const days = listDayFolders("Test 群");
   assert.deepEqual(days, ["2026-11-18"]);

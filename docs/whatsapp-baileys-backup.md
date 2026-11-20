@@ -1,6 +1,6 @@
-# WhatsApp Baileys linked-device photo backup
+# WhatsApp Baileys linked-device photo + PDF backup
 
-**Primary** intake path for LK-P01043 Site Memo photos. Uses [`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys) as a **linked device** (WebSocket — **no Chromium**). Incoming photos land in the same `Group_photo_backup` tree the Draft UI reads.
+**Primary** intake path for LK-P01043 Site Memo media. Uses [`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys) as a **linked device** (WebSocket — **no Chromium**). Incoming **photos and PDFs** land in the same `Group_photo_backup` tree the Draft UI reads, with durable tags for filtering.
 
 Patterns adapted from [whatsapp-media-saver](https://github.com/lanlhl2005-star/whatsapp-media-saver).
 
@@ -47,7 +47,7 @@ The Draft UI lists **all** top-level folders under `Group_photo_backup` (group s
 
 1. **Spare Linked devices slot** — WhatsApp caps linked devices; free a slot before linking.
 2. **Phone stays primary** — this process is an extra linked device only; it does not take over the phone session.
-3. **Desktop daily use undisturbed** — keep using WhatsApp Desktop for chat; this daemon only archives incoming photos.
+3. **Desktop daily use undisturbed** — keep using WhatsApp Desktop for chat; this daemon only archives incoming photos and PDFs.
 4. **Do not QR-link from cloud / this agent** — copy the repo to an always-on **Windows PC** and run `npm run wa-link` there.
 5. **Never commit** `.wa-auth\` (session secrets), state, or heartbeat files.
 6. **Incoming only** — outbound (`fromMe`) media is ignored; the daemon never sends messages.
@@ -146,10 +146,29 @@ Restart the daemon after every pull so it picks up code changes (auth under `.wa
 
 | Saved | Skipped |
 | --- | --- |
-| Incoming **image** (default `mediaTypes`) from groups → `<group subject>\YYYY-MM-DD\` | Outgoing (`fromMe`) |
-| Incoming **image** from 1:1 → `individual\YYYY-MM-DD\` | Audio, stickers, PTT (and video/document unless you extend `mediaTypes`) |
+| Incoming **image** and **PDF** (default `mediaTypes`: `["image","pdf"]`) from groups → `<group subject>\YYYY-MM-DD\` | Outgoing (`fromMe`) |
+| Same for 1:1 → `individual\YYYY-MM-DD\` | Audio, stickers, PTT, non-PDF documents, video (unless you extend `mediaTypes`) |
 
 Filename: caption (sanitized) → else original file stem → else `WA_<msgid>.ext`. Collisions → `name_2.ext`.
+
+### Tags (per file)
+
+Every newly saved photo/PDF gets:
+
+| Tag | Source |
+| --- | --- |
+| **sender number** | Group participant JID or 1:1 chat JID (digits before `@`, device suffix stripped) |
+| **sending date** | Message timestamp in `Asia/Hong_Kong` (`YYYY-MM-DD HH:mm:ss`) |
+| **caption / message** | Media caption itself, plus same-sender text messages in the same chat within **±5 minutes** |
+
+Stored as:
+
+- `<file>.tags.json` next to the media (survives UNC)
+- day-folder `tags.json` index (`{ "files": { "<name>": {…} } }`) for Draft UI search
+
+**No backfill:** older files saved before this feature have no tags until new media arrives. Restart `npm run wa-backup` after pull so the daemon writes tags for new files.
+
+Draft UI browse lists PDFs with a **PDF** badge (filterable by tags) but only **images** can be added to Site Memo photo blocks.
 
 ---
 

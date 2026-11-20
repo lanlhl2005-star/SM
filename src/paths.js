@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
 import { uncMappedDriveHint } from "./unc-mapped-drive.js";
+import { filterMediaByTags, readMediaTags } from "./wa-backup/tags.js";
 
 const IMAGE_EXT = new Set([
   ".jpg",
@@ -14,7 +15,27 @@ const IMAGE_EXT = new Set([
   ".tiff",
 ]);
 
+const PDF_EXT = new Set([".pdf"]);
+
+/** Browse list: photos + PDFs (PDFs are not embeddable in Site Memo photo tables). */
+const BROWSE_EXT = new Set([...IMAGE_EXT, ...PDF_EXT]);
+
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const SIDECAR_RE = /\.tags\.json$/i;
+
+export function mediaTypeFromExt(fileName) {
+  const ext = path.extname(fileName).toLowerCase();
+  if (PDF_EXT.has(ext)) return "pdf";
+  if (IMAGE_EXT.has(ext)) return "image";
+  return "other";
+}
+
+export function isImageMedia(fileName) {
+  return IMAGE_EXT.has(path.extname(fileName).toLowerCase());
+}
+
+export { filterMediaByTags };
 
 /** Reject path segments that could escape or nest unexpectedly. */
 export function assertGroupName(group) {
@@ -198,7 +219,12 @@ export function listDayFolders(group) {
     .reverse();
 }
 
-export function listPhotos(group, day) {
+/**
+ * List browseable media (images + PDFs) under group/day.
+ * Attaches durable tags from `.tags.json` sidecar / day `tags.json` when present.
+ * Optional filters: { sender, date, text } (case-insensitive substring).
+ */
+export function listPhotos(group, day, filters = {}) {
   if (!DAY_RE.test(day)) {
     throw new Error("Invalid day folder; expected YYYY-MM-DD");
   }
@@ -211,15 +237,22 @@ export function listPhotos(group, day) {
     throw err;
   }
   const groupName = assertGroupName(group);
-  return entries
-    .filter(
-      (d) =>
-        entryIsFile(dir, d) &&
-        IMAGE_EXT.has(path.extname(d.name).toLowerCase())
-    )
+  const items = entries
+    .filter((d) => {
+      if (!entryIsFile(dir, d)) return false;
+      if (SIDECAR_RE.test(d.name) || d.name === "tags.json") return false;
+      return BROWSE_EXT.has(path.extname(d.name).toLowerCase());
+    })
     .map((d) => {
       const full = path.join(dir, d.name);
       const st = fs.statSync(full);
+      const mediaType = mediaTypeFromExt(d.name);
+      let tags = null;
+      try {
+        tags = readMediaTags(full);
+      } catch {
+        tags = null;
+      }
       return {
         group: groupName,
         day,
@@ -227,9 +260,24 @@ export function listPhotos(group, day) {
         relativePath: path.join(groupName, day, d.name).replace(/\\/g, "/"),
         size: st.size,
         mtime: st.mtime.toISOString(),
+        mediaType,
+        /** Images can be added to Site Memo photo blocks; PDFs browse-only. */
+        pickable: mediaType === "image",
+        tags: tags
+          ? {
+              sender: tags.sender || "",
+              sendDate: tags.sendDate || "",
+              sendTs: tags.sendTs ?? null,
+              caption: tags.caption || "",
+              captions: Array.isArray(tags.captions) ? tags.captions : [],
+              mediaType: tags.mediaType || mediaType,
+            }
+          : null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  return filterMediaByTags(items, filters);
 }
 
 /**
