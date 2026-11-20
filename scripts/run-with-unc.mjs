@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadDotEnvFile } from "../src/load-dotenv.js";
 import {
   applyUncHostAllowlist,
   uncHostsFromPaths,
@@ -24,27 +25,6 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-
-function loadDotEnv() {
-  const dotenvPath = path.join(ROOT, ".env");
-  if (!fs.existsSync(dotenvPath)) return;
-  const text = fs.readFileSync(dotenvPath, "utf8");
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq < 1) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-}
 
 function loadDefaultPaths() {
   const defaultsPath = path.join(ROOT, "config", "default.json");
@@ -60,7 +40,9 @@ function loadDefaultPaths() {
 }
 
 function collectPaths() {
-  loadDotEnv();
+  // Same shared parser as src/config.js — empty placeholder lines must not
+  // block a later DRAFT_UI_PASSWORD=… value in .env.
+  loadDotEnvFile(ROOT);
   const defaults = loadDefaultPaths();
   return [
     process.env.PHOTO_BACKUP_ROOT || defaults.photoBackupRoot,

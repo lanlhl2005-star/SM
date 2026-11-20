@@ -1,34 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadDotEnvFile } from "./load-dotenv.js";
 import { allowUncHostsForPaths } from "./unc-allowlist.js";
 import { preferMappedDrivePath } from "./unc-mapped-drive.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
-function loadDotEnv() {
-  const dotenvPath = path.join(ROOT, ".env");
-  if (!fs.existsSync(dotenvPath)) return;
-  const text = fs.readFileSync(dotenvPath, "utf8");
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq < 1) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-}
-
-loadDotEnv();
+/** Result of loading repo-root `.env` (shared parser; empty values can be overridden). */
+export const dotEnvLoad = loadDotEnvFile(ROOT);
 
 const defaults = JSON.parse(
   fs.readFileSync(path.join(ROOT, "config", "default.json"), "utf8")
@@ -47,8 +28,7 @@ function expandWindowsEnv(input) {
   });
 }
 
-const envPath = path.join(ROOT, ".env");
-export const envFileExists = fs.existsSync(envPath);
+export const envFileExists = dotEnvLoad.loaded;
 
 // Mock ONLY when USE_MOCK is explicitly truthy. Unset / false → live UNC from
 // config/default.json (or PHOTO_* / SITE_* env overrides). No auto-fallback when
