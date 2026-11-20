@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import express from "express";
 import {
+  AUTH_STATUS_PATH,
   COOKIE_NAME,
   LOGIN_PATH,
+  LOGOUT_PATH,
+  buildAuthClearCookies,
   buildAuthSetCookie,
   createDraftUiAuth,
   requestLooksHttps,
@@ -38,6 +42,15 @@ test("blank DRAFT_UI_PASSWORD falls through to UI_PASSWORD", () => {
     resolveDraftUiPassword({ DRAFT_UI_PASSWORD: "   ", UI_PASSWORD: "alias" }),
     "alias"
   );
+});
+
+test("cookie name is v2 so legacy sm_draft_auth sessions cannot skip login", () => {
+  assert.equal(COOKIE_NAME, "sm_draft_auth_v2");
+  const legacy = crypto
+    .createHmac("sha256", "site-memo-draft-ui-v1")
+    .update("same")
+    .digest("hex");
+  assert.notEqual(sessionTokenForPassword("same"), legacy);
 });
 
 /**
@@ -116,6 +129,12 @@ function request(app, opts) {
   });
 }
 
+/** @param {string | string[] | undefined} setCookie */
+function setCookieHeader(setCookie) {
+  if (!setCookie) return "";
+  return Array.isArray(setCookie) ? setCookie.join("\n") : String(setCookie);
+}
+
 test("auth disabled when password empty: open access", async () => {
   const { app, auth } = buildTestApp("");
   assert.equal(auth.enabled, false);
@@ -130,14 +149,17 @@ test("auth disabled when password empty: open access", async () => {
 test("auth rejects HTML and API without cookie", async () => {
   const { app, auth } = buildTestApp("test-password");
   assert.equal(auth.enabled, true);
+  assert.equal(auth.passwordLength, "test-password".length);
 
   const html = await request(app, { path: "/" });
   assert.equal(html.status, 302);
   assert.match(String(html.headers.location), new RegExp(`^${LOGIN_PATH}`));
+  assert.match(String(html.headers["cache-control"] || ""), /no-store/i);
 
   const api = await request(app, { path: "/api/health" });
   assert.equal(api.status, 401);
   assert.equal(api.json()?.error, "Unauthorized");
+  assert.equal(api.json()?.authRequired, true);
 });
 
 test("auth rejects static assets without cookie", async () => {
@@ -145,6 +167,17 @@ test("auth rejects static assets without cookie", async () => {
   const css = await request(app, { path: "/styles.css" });
   assert.equal(css.status, 302);
   assert.match(String(css.headers.location), new RegExp(`^${LOGIN_PATH}`));
+});
+
+test("legacy v1 cookie name is rejected", async () => {
+  const password = "test-password";
+  const { app } = buildTestApp(password);
+  const token = sessionTokenForPassword(password);
+  const api = await request(app, {
+    path: "/api/health",
+    headers: { Cookie: `sm_draft_auth=${token}` },
+  });
+  assert.equal(api.status, 401);
 });
 
 test("auth accepts valid session cookie", async () => {
@@ -193,13 +226,13 @@ test("login form sets cookie and allows API", async () => {
   });
   assert.equal(login.status, 302);
   assert.equal(login.headers.location, "/api/health");
-  const setCookie = String(login.headers["set-cookie"] || "");
+  const setCookie = setCookieHeader(login.headers["set-cookie"]);
   assert.match(setCookie, new RegExp(`${COOKIE_NAME}=`));
   assert.match(setCookie, /HttpOnly/i);
   assert.match(setCookie, /SameSite=Lax/i);
   assert.doesNotMatch(setCookie, /;\s*Secure/i);
 
-  const cookiePair = setCookie.split(";")[0];
+  const cookiePair = setCookie.split(/[\r\n]/)[0].split(";")[0];
   const api = await request(app, {
     path: "/api/health",
     headers: { Cookie: cookiePair },
@@ -218,8 +251,51 @@ test("login over Cloudflare HTTPS sets Secure cookie", async () => {
     body: { password, next: "/" },
   });
   assert.equal(login.status, 302);
-  const setCookie = String(login.headers["set-cookie"] || "");
+  const setCookie = setCookieHeader(login.headers["set-cookie"]);
   assert.match(setCookie, /;\s*Secure/i);
+});
+
+test("logout clears Secure cookie on HTTPS tunnel", async () => {
+  const password = "tunnel-secret";
+  const { app } = buildTestApp(password);
+  const token = sessionTokenForPassword(password);
+  const out = await request(app, {
+    path: LOGOUT_PATH,
+    headers: {
+      "X-Forwarded-Proto": "https",
+      Cookie: `${COOKIE_NAME}=${token}`,
+    },
+  });
+  assert.equal(out.status, 200);
+  assert.match(out.text, /Signed out|password/i);
+  const setCookie = setCookieHeader(out.headers["set-cookie"]);
+  assert.match(setCookie, new RegExp(`${COOKIE_NAME}=`));
+  assert.match(setCookie, /Max-Age=0/i);
+  assert.match(setCookie, /;\s*Secure/i);
+  assert.match(setCookie, /sm_draft_auth=/);
+});
+
+test("?logout=1 clears session and redirects to login", async () => {
+  const password = "session-secret";
+  const { app } = buildTestApp(password);
+  const token = sessionTokenForPassword(password);
+  const res = await request(app, {
+    path: "/?logout=1",
+    headers: { Cookie: `${COOKIE_NAME}=${token}` },
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.location, LOGIN_PATH);
+  const setCookie = setCookieHeader(res.headers["set-cookie"]);
+  assert.match(setCookie, /Max-Age=0/i);
+});
+
+test("public /api/auth-status reports authRequired without cookie", async () => {
+  const { app } = buildTestApp("gate");
+  const res = await request(app, { path: AUTH_STATUS_PATH });
+  assert.equal(res.status, 200);
+  assert.equal(res.json()?.authRequired, true);
+  assert.equal(res.json()?.login, LOGIN_PATH);
+  assert.equal(res.json()?.logout, LOGOUT_PATH);
 });
 
 test("requestLooksHttps uses x-forwarded-proto without requiring localhost HTTPS", () => {
@@ -245,6 +321,13 @@ test("buildAuthSetCookie Secure only when requested", () => {
   const token = "abc";
   assert.doesNotMatch(buildAuthSetCookie(token, { secure: false }), /Secure/);
   assert.match(buildAuthSetCookie(token, { secure: true }), /Secure/);
+});
+
+test("buildAuthClearCookies includes Secure when requested", () => {
+  const cookies = buildAuthClearCookies({ secure: true });
+  assert.ok(cookies.length >= 2);
+  assert.match(cookies[0], /Secure/);
+  assert.match(cookies[1], /sm_draft_auth=/);
 });
 
 test("createApp gates HTML, static, guide image, and all API routes", async () => {
@@ -285,6 +368,10 @@ test("createApp gates HTML, static, guide image, and all API routes", async () =
     }
   }
 
+  const status = await request(app, { path: AUTH_STATUS_PATH });
+  assert.equal(status.status, 200);
+  assert.equal(status.json()?.authRequired, true);
+
   const postDraft = await request(app, {
     method: "POST",
     path: "/api/drafts",
@@ -305,4 +392,8 @@ test("createApp with empty password stays open (local-only design)", async () =>
   assert.equal(res.status, 200);
   assert.equal(res.json()?.ok, true);
   assert.equal(res.json()?.auth, false);
+  assert.equal(res.json()?.authRequired, false);
+  const status = await request(app, { path: AUTH_STATUS_PATH });
+  assert.equal(status.status, 200);
+  assert.equal(status.json()?.authRequired, false);
 });

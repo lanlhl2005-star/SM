@@ -15,6 +15,7 @@
     "backup-watch": "node scripts/run-with-unc.mjs src/backup-watch.js",
     "backup-watch:once": "node scripts/run-with-unc.mjs src/backup-watch.js --once",
     "postinstall": "node scripts/patch-baileys-json-imports.mjs",
+    "check:auth": "node scripts/check-draft-ui-auth.mjs",
     "test": "node --import ./scripts/env-mock.mjs --test test/**/*.test.js",
     "smoke": "node --import ./scripts/env-mock.mjs src/cli-draft.js --subject \"Smoke test chilled water notice\" --short \"chilled water notice\" --intro \"Refer to site inspection, please note the following.\" --bullet \"Temporary storage area at L1\" --image site-memo/2026-11-18/IMG_chiller_plant.jpg --caption \"Photo of 14/F Chiller Plant\" --image site-memo/2026-11-18/IMG_cooling_tower.jpg --caption \"Photo of R/F Cooling Tower Area (Low Zone)\"",
     "smoke:backup": "node --import ./scripts/env-mock.mjs src/backup-watch.js --once"

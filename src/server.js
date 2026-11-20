@@ -77,6 +77,7 @@ export function createApp(opts = {}) {
         memo_number: formatDocSeq(seq),
       },
       auth: draftUiAuth.enabled,
+      authRequired: draftUiAuth.enabled,
     });
   });
 
@@ -202,13 +203,18 @@ function printStartupBanner(draftUiAuth) {
 
   console.log(`Site Memo Draft UI  http://${config.host}:${config.port}`);
   console.log(`  mode: ${config.useMock ? "MOCK" : "LIVE"} (USE_MOCK=${config.useMock})`);
-  console.log(
-    `  auth: ${
-      draftUiAuth.enabled
-        ? "ON (DRAFT_UI_PASSWORD / UI_PASSWORD set — login required)"
-        : "OFF (no DRAFT_UI_PASSWORD — open local access; set password before tunnel)"
-    }`
-  );
+  if (draftUiAuth.enabled) {
+    console.log(
+      `  auth: ON (login required; password length ${draftUiAuth.passwordLength})`
+    );
+    console.log(
+      "  auth: session cookie sm_draft_auth_v2 — old cookies ignored; use /logout or ?logout=1"
+    );
+  } else {
+    console.log(
+      "  auth: OFF (no DRAFT_UI_PASSWORD — open local access; set password before tunnel)"
+    );
+  }
   if (!draftUiAuth.enabled && envFileExists) {
     const appliedKeys = Object.keys(dotEnvLoad.applied || {});
     const touchedAuth = appliedKeys.some((k) =>
@@ -237,7 +243,7 @@ function printStartupBanner(draftUiAuth) {
   if (!envFileExists) {
     console.warn("  .env: MISSING (default LIVE; mock only if USE_MOCK=true)");
   } else {
-    console.log("  .env: loaded");
+    console.log(`  .env: loaded (${dotEnvLoad.path})`);
   }
   const { groups, listError } = safeListPhotoGroups();
   if (listError) {

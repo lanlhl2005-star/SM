@@ -28,18 +28,26 @@ When exposing the UI (especially via Cloudflare quick tunnel), set a password in
 DRAFT_UI_PASSWORD=your-secret-here
 ```
 
-Then **restart** Draft UI (`Ctrl+C`, then `npm start`) so the gate loads. On startup the console prints `auth: ON` or `auth: OFF` — confirm **ON** before sharing a tunnel URL. With a password set, every HTML page, static asset, and `/api/*` route requires sign-in (cookie session after `/login`). Do not leave a blank `DRAFT_UI_PASSWORD=` line above the real value in `.env`.
+Then **restart** Draft UI (`Ctrl+C`, then `npm start`) so the gate loads. On startup the console prints `auth: ON (… password length N)` or `auth: OFF`, plus the absolute `.env` path — confirm **ON** before sharing a tunnel URL. With a password set, every HTML page, static asset, and `/api/*` route (except public `/api/auth-status`) requires sign-in (HttpOnly cookie after `/login`; Cloudflare HTTPS sets the `Secure` flag). Do not leave a blank `DRAFT_UI_PASSWORD=` line above the real value in `.env`.
+
+If the Draft UI opens **without** a login form while the console says `auth: ON`, the browser still has a session cookie (common after an earlier tunnel visit). Sign out with **Sign out** in the header, open `/logout`, or add `?logout=1` to the URL. Changing the password also invalidates old cookies.
+
+Quick check (Windows or any host):
+
+```bat
+npm run check:auth
+```
 
 ### Share Draft UI over the internet (Cloudflare quick tunnel)
 
-1. Set `DRAFT_UI_PASSWORD` in `.env` and restart `npm start`.
+1. Set `DRAFT_UI_PASSWORD` in `.env` and restart `npm start` (confirm `auth: ON`).
 2. In another terminal:
 
 ```bat
 npm run tunnel
 ```
 
-Copy the printed `https://….trycloudflare.com` URL from the cloudflared output. Open it, enter the Draft UI password on the login page. Keep the tunnel running while colleagues use the link. Press **Ctrl+C** to stop the tunnel. No Cloudflare account is required for quick tunnels (`npx` downloads `cloudflared` on demand).
+Copy the printed `https://….trycloudflare.com` URL from the cloudflared output. Open it — you should see the login page (use a private window if an old cookie is stuck). Keep the tunnel running while colleagues use the link. Press **Ctrl+C** to stop the tunnel. No Cloudflare account is required for quick tunnels (`npx` downloads `cloudflared` on demand).
 
 ### Photo backup — Baileys linked device (primary)
 
