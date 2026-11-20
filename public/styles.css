@@ -13,6 +13,11 @@
 
 * { box-sizing: border-box; }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   color: var(--ink);
@@ -21,6 +26,7 @@ body {
     radial-gradient(900px 400px at 100% 0%, #f0e4d8 0%, transparent 55%),
     var(--bg);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .top {
@@ -29,9 +35,20 @@ body {
   gap: 1.5rem;
   align-items: flex-start;
   padding: 1.25rem 1.5rem 0.75rem;
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
   border-bottom: 1px solid var(--line);
   background: rgba(247, 250, 252, 0.85);
   backdrop-filter: blur(6px);
+}
+
+/* Guide + form: stacked on phone; side-by-side on desktop */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 0 2rem;
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
 }
 
 h1 {
@@ -62,15 +79,70 @@ h1 {
 
 .layout {
   display: grid;
-  grid-template-columns: 1.1fr 0.95fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
-  padding: 1rem 1.25rem 2rem;
+  padding: 0 1.25rem;
+  padding-left: max(1.25rem, env(safe-area-inset-left));
+  padding-right: max(1.25rem, env(safe-area-inset-right));
+  min-width: 0;
 }
 
-@media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr; }
-  .path-meta { text-align: left; }
-  .top { flex-direction: column; }
+/* Tablet / medium: two comfortable form columns */
+@media (min-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr 1fr;
+  }
+  .layout .panel:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Wide desktop: guide beside form; three form columns when space allows */
+@media (min-width: 1100px) {
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(17rem, 0.88fr) minmax(0, 1.55fr);
+    align-items: start;
+    gap: 1rem;
+    padding: 1rem 1.25rem 2rem;
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
+  }
+
+  .layout {
+    padding: 0;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1400px) {
+  .workspace {
+    grid-template-columns: minmax(18rem, 0.75fr) minmax(0, 1.7fr);
+  }
+
+  .layout {
+    grid-template-columns: 1.1fr 0.95fr 1fr;
+  }
+
+  .layout .panel:last-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .path-meta { text-align: left; max-width: none; }
+  .top {
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.9rem 0.85rem 0.65rem;
+    padding-left: max(0.85rem, env(safe-area-inset-left));
+    padding-right: max(0.85rem, env(safe-area-inset-right));
+  }
+  .layout {
+    padding: 0 0.75rem;
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
 }
 
 .panel {
@@ -80,6 +152,7 @@ h1 {
   padding: 1rem 1rem 1.15rem;
   box-shadow: var(--shadow);
   min-height: 12rem;
+  min-width: 0;
 }
 
 h2 {
@@ -311,11 +384,24 @@ h2 {
 
 /* —— Memo field → Word section guide —— */
 .memo-guide {
-  margin: 0 1.25rem 0.25rem;
+  margin: 0 1.25rem;
+  margin-left: max(1.25rem, env(safe-area-inset-left));
+  margin-right: max(1.25rem, env(safe-area-inset-right));
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(247, 250, 252, 0.95);
   box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .memo-guide {
+    margin: 0;
+    position: sticky;
+    top: 0.5rem;
+    max-height: calc(100vh - 1rem);
+    overflow: auto;
+  }
 }
 
 .memo-guide > summary {
@@ -327,6 +413,7 @@ h2 {
   gap: 0.35rem 1rem;
   padding: 0.7rem 1rem;
   user-select: none;
+  min-height: 2.75rem;
 }
 
 .memo-guide > summary::-webkit-details-marker { display: none; }
@@ -364,9 +451,35 @@ h2 {
   align-items: start;
 }
 
-@media (max-width: 900px) {
-  .memo-guide { margin: 0 0.75rem 0.25rem; }
+@media (max-width: 1099px) {
   .memo-guide-stage { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 767px) {
+  .memo-guide {
+    margin: 0 0.75rem;
+    margin-left: max(0.75rem, env(safe-area-inset-left));
+    margin-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .memo-guide > summary {
+    padding: 0.85rem 0.9rem;
+    min-height: 3rem;
+  }
+
+  .memo-guide-figure {
+    max-height: min(48vh, 22rem);
+  }
+
+  .memo-guide-legend {
+    max-height: none;
+    font-size: 0.86rem;
+  }
+
+  .memo-guide-legend li {
+    padding: 0.55rem 0.55rem;
+    min-height: 2.5rem;
+  }
 }
 
 .memo-guide-figure {
@@ -496,4 +609,87 @@ h2 {
 .field.guide-active select {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(31, 79, 122, 0.18);
+}
+
+/* —— Phone: larger tap targets, stacked blocks —— */
+@media (max-width: 767px) {
+  h1 { font-size: 1.25rem; }
+
+  .field input,
+  .field select,
+  .field textarea {
+    min-height: 2.75rem;
+    padding: 0.65rem 0.7rem;
+    font-size: 1rem; /* avoid iOS zoom on focus */
+  }
+
+  .field textarea {
+    min-height: 5rem;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    max-height: none;
+    gap: 0.65rem;
+  }
+
+  .photo-card {
+    min-height: 7rem;
+  }
+
+  .photo-card img {
+    height: 100px;
+  }
+
+  .select-actions {
+    gap: 0.5rem;
+  }
+
+  .select-actions button,
+  .block-actions button,
+  .actions button {
+    min-height: 2.75rem;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.92rem;
+  }
+
+  .actions button.primary {
+    width: 100%;
+    min-height: 3rem;
+    font-size: 1.05rem;
+  }
+
+  .block {
+    grid-template-columns: 1fr;
+  }
+
+  .block .thumbs {
+    max-width: none;
+  }
+
+  .block .thumb-rm {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.9rem;
+  }
+
+  .block-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .guide-marker {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.8rem;
+  }
+
+  .panel {
+    min-height: 0;
+    padding: 0.9rem 0.85rem 1rem;
+  }
 }
