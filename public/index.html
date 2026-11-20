@@ -97,22 +97,23 @@
             <span>Filter caption / message</span>
             <input id="filterText" type="search" placeholder="Nearby text tag" autocomplete="off" />
           </label>
-          <button type="button" id="clearFiltersBtn" class="filter-clear">Clear filters</button>
+          <button type="button" id="clearFiltersBtn" class="btn btn-ghost filter-clear">Clear filters</button>
         </div>
         <div id="photoGrid" class="photo-grid"></div>
         <div class="select-actions">
           <span id="selectCount" class="hint">None selected</span>
-          <button type="button" id="addOneBlockBtn" disabled title="One bordered group, shared caption">Add as one block</button>
-          <button type="button" id="addEachBtn" disabled title="One photo + caption each">Add each separately</button>
-          <button type="button" id="clearSelectBtn" disabled>Clear</button>
+          <button type="button" id="addOneBlockBtn" class="btn btn-primary" disabled title="One bordered group, shared caption">Add as one block</button>
+          <button type="button" id="addEachBtn" class="btn btn-secondary" disabled title="One photo + caption each">Add each separately</button>
+          <button type="button" id="clearSelectBtn" class="btn btn-ghost" disabled>Clear</button>
         </div>
-        <p class="hint">Select one or more <b>photos</b>, then <b>Add as one block</b> (shared border + one caption) or <b>Add each separately</b>. PDFs appear with a badge for browse/filter only (not embeddable in the memo). Order in section 2 = order in the memo.</p>
+        <p class="hint">Select one or more <b>photos</b>, then <b>Add as one block</b> (shared border + one caption) or <b>Add each separately</b>. Or <b>drag</b> a photo into a block below. PDFs are browse/filter only. Order in section 2 = order in the memo.</p>
       </section>
 
       <section class="panel" aria-labelledby="blocks-heading" data-guide-field="11">
         <h2 id="blocks-heading"><span class="guide-num" data-guide="11" aria-hidden="true">11</span> 2. Photo blocks</h2>
         <div id="blocks" class="blocks"></div>
-        <p id="blocksEmpty" class="hint">No photo blocks yet — select photos above, then add as one block or separately.</p>
+        <p id="blocksEmpty" class="hint">No photo blocks yet — select photos above, or drag a photo here to start a block.</p>
+        <p class="dnd-hint">Drag photos to reorder inside a block, drag a gallery photo onto a block to add it, or use ← → / ↑ ↓ handles on phone.</p>
       </section>
 
       <section class="panel" aria-labelledby="fields-heading">
@@ -154,7 +155,7 @@
         </label>
         <p class="folder-preview" id="folderPreview"></p>
         <div class="actions">
-          <button type="button" id="submitBtn" class="primary">Create Draft .doc</button>
+          <button type="button" id="submitBtn" class="btn btn-primary">Create Draft .doc</button>
         </div>
         <pre id="result" class="result" hidden></pre>
       </section>
