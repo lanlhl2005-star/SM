@@ -8,6 +8,7 @@ import { createDraftMemo } from "../src/create-draft.js";
 import {
   buildSiteMemoHtml,
   extractLetterheadPngFromTemplate,
+  photoDisplaySize,
   verifyWordHtmlImageEmbeds,
   writeSiteMemoDoc,
 } from "../src/generate-doc.js";
@@ -91,18 +92,31 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
     assert.match(html, /- Temporary storage area at L1/);
     assert.doesNotMatch(html, /<ul[\s>]/);
 
-    // Photo tables Single / 0.5 — data: URI embeds
+    // Photo tables Single / 0.5 — data: URI embeds, display-capped (not full-page 520px)
     assert.match(html, /class="MsoNormalTable photo-block"/);
     assert.match(html, /mso-border-alt:solid windowtext \.5pt/);
     assert.match(html, /Photo of 14\/F Chiller Plant/);
     assert.match(html, /data:image\/png;base64,/);
     assert.match(html, /data:image\/jpeg;base64,/);
+    const single = photoDisplaySize(1);
+    assert.match(
+      html,
+      new RegExp(`width="${single.px}"[^>]*style='width:${single.cm}cm`)
+    );
+    assert.doesNotMatch(html, /width="520"/);
+    assert.ok(single.cm >= 5 && single.cm <= 7, "single photo ~5–7cm print width");
 
     const verified = verifyWordHtmlImageEmbeds(html);
     assert.equal(verified.imageCount, 3, "letterhead + 2 photos");
     assert.ok(verified.letterheadBytes > 10_000);
     assert.equal(verified.photoBytes.length, 2);
     assert.ok(verified.photoBytes.every((n) => n > 1000));
+    // Full original JPEG bytes embedded (display size does not downsample).
+    const fileBytes = fs.statSync(photoPath).size;
+    assert.ok(
+      verified.photoBytes[0] >= fileBytes * 0.95,
+      "embedded photo bytes ≈ original file (no downsample)"
+    );
 
     // Sign-off after photos
     assert.match(html, /Yours faithfully,/);
@@ -154,6 +168,83 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
     assert.match(text, /mso-ascii-font-family:Calibri/);
     const verified = verifyWordHtmlImageEmbeds(text);
     assert.equal(verified.imageCount, 2);
+  });
+
+  it("multi-photo block: one border, one caption, display-capped grid", () => {
+    const a = mockPhoto("site-memo/2026-11-18/IMG_chiller_plant.jpg");
+    const b = mockPhoto("site-memo/2026-11-18/IMG_cooling_tower.jpg");
+    const c = mockPhoto("site-memo/2026-11-18/IMG_corridor.jpg");
+    const payload = {
+      date: "20/11/2026",
+      memo_number: "020",
+      copy_to: "",
+      subject: "Multi-photo caption group",
+      body_intro: "Grouped site photos.",
+      body_items: ["Check routing"],
+      photo_blocks: [
+        {
+          image: "site-memo/2026-11-18/IMG_chiller_plant.jpg",
+          images: [
+            "site-memo/2026-11-18/IMG_chiller_plant.jpg",
+            "site-memo/2026-11-18/IMG_cooling_tower.jpg",
+            "site-memo/2026-11-18/IMG_corridor.jpg",
+          ],
+          absolutePath: a,
+          absolutePaths: [a, b, c],
+          caption: "Chiller / cooling / corridor",
+        },
+      ],
+    };
+
+    const html = buildSiteMemoHtml(payload);
+    assert.equal(
+      (html.match(/class="MsoNormalTable photo-block"/g) || []).length,
+      1,
+      "one bordered block for the group"
+    );
+    assert.match(html, /class="MsoNormalTable photo-row"/);
+    assert.match(html, /Chiller \/ cooling \/ corridor/);
+    assert.equal(
+      (html.match(/Chiller \/ cooling \/ corridor/g) || []).length,
+      1,
+      "single shared caption"
+    );
+
+    const grid = photoDisplaySize(3);
+    assert.match(
+      html,
+      new RegExp(`width="${grid.px}"[^>]*style='width:${grid.cm}cm`)
+    );
+
+    const verified = verifyWordHtmlImageEmbeds(html);
+    assert.equal(verified.imageCount, 4, "letterhead + 3 photos");
+    assert.ok(verified.photoBytes.every((n) => n > 1000));
+  });
+
+  it("createDraftMemo accepts images[] multi-photo block", () => {
+    config.siteMemoRoot = tmpRoot;
+    const result = createDraftMemo({
+      subject: "Multi image draft",
+      short_subject: "multi image",
+      date: "20/11/2026",
+      body_intro: "Grouped.",
+      body_items: ["Item"],
+      photo_blocks: [
+        {
+          images: [
+            "site-memo/2026-11-18/IMG_chiller_plant.jpg",
+            "site-memo/2026-11-18/IMG_delivery_note.jpg",
+          ],
+          caption: "Plant and delivery",
+        },
+      ],
+    });
+    assert.equal(result.photo_count, 1, "one block even with two images");
+    const text = fs.readFileSync(result.file_path, "utf8");
+    assert.match(text, /Plant and delivery/);
+    assert.match(text, /photo-row/);
+    const verified = verifyWordHtmlImageEmbeds(text);
+    assert.equal(verified.imageCount, 3, "letterhead + 2 photos");
   });
 
   it("rejects MHTML / relative / cid strategies in verifier", () => {

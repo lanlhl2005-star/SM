@@ -32,11 +32,27 @@ export function createDraftMemo(input) {
 
   const photoBlocksIn = Array.isArray(input.photo_blocks) ? input.photo_blocks : [];
   const photo_blocks = photoBlocksIn.map((b, i) => {
-    if (!b || !b.image) throw new Error(`photo_blocks[${i}].image is required`);
-    const absolutePath = resolvePhotoPath(b.image);
+    if (!b) throw new Error(`photo_blocks[${i}] is required`);
+    // Prefer images[] (multi-photo + one caption); keep image for single-photo back-compat.
+    const rels = [];
+    if (Array.isArray(b.images) && b.images.length) {
+      for (const img of b.images) {
+        if (img) rels.push(String(img));
+      }
+    } else if (b.image) {
+      rels.push(String(b.image));
+    }
+    if (!rels.length) {
+      throw new Error(
+        `photo_blocks[${i}].image or photo_blocks[${i}].images[] is required`
+      );
+    }
+    const absolutePaths = rels.map((rel) => resolvePhotoPath(rel));
     return {
-      image: b.image,
-      absolutePath,
+      image: rels[0],
+      images: rels,
+      absolutePath: absolutePaths[0],
+      absolutePaths,
       caption: String(b.caption ?? "").trim() || `Photo ${i + 1}`,
     };
   });

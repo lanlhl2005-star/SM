@@ -71,10 +71,84 @@ export function extractLetterheadPngFromTemplate(templatePath = config.templateD
 }
 
 /**
+ * Printed display size only — full original pixels stay in the data: URI so
+ * Word users can enlarge/crop later. Target ≈ 1/8–1/12 of an A4 page:
+ * usable width ~16cm; single photo ~6cm; multi-photo cells a bit smaller.
+ * 96 CSS px/in → 6cm ≈ 227px (Word HTML width= attribute).
+ */
+const PHOTO_DISPLAY = {
+  singleCm: 6.0,
+  pairCm: 5.5,
+  gridCm: 5.0,
+  cmToPx(cm) {
+    return Math.round((cm / 2.54) * 96);
+  },
+};
+
+export function photoDisplaySize(imageCount) {
+  const n = Math.max(1, imageCount | 0);
+  const cm =
+    n === 1
+      ? PHOTO_DISPLAY.singleCm
+      : n === 2
+        ? PHOTO_DISPLAY.pairCm
+        : PHOTO_DISPLAY.gridCm;
+  return { cm, px: PHOTO_DISPLAY.cmToPx(cm) };
+}
+
+function photoImgHtml(imgSrc, alt, display) {
+  // width=/style width only constrain Word layout; src keeps full-resolution bytes.
+  return `<img width="${display.px}" src="${imgSrc}" alt="${escapeHtml(alt)}"
+          style='width:${display.cm}cm;max-width:100%;height:auto;'/>`;
+}
+
+/**
+ * Lay out 1..N photos inside one bordered cell: single centered, 2 side-by-side,
+ * 3+ as a 2-column nested table. Still one outer photo-block border.
+ */
+function photoImagesCellHtml(imgSrcs, blockIndex) {
+  const display = photoDisplaySize(imgSrcs.length);
+  if (imgSrcs.length === 1) {
+    return `<p class="MsoNormal" align="center" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;text-align:center;'>
+        ${photoImgHtml(imgSrcs[0], `photo ${blockIndex + 1}`, display)}
+      </p>`;
+  }
+
+  const cols = 2;
+  const rows = [];
+  for (let i = 0; i < imgSrcs.length; i += cols) {
+    const slice = imgSrcs.slice(i, i + cols);
+    const tds = slice
+      .map(
+        (src, j) =>
+          `<td valign="middle" align="center" style='padding:2.0pt 4.0pt;border:none;'>
+            <p class="MsoNormal" align="center" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;text-align:center;'>
+              ${photoImgHtml(src, `photo ${blockIndex + 1}.${i + j + 1}`, display)}
+            </p>
+          </td>`
+      )
+      .join("");
+    // Pad odd last row so borders stay even.
+    const pad =
+      slice.length < cols
+        ? `<td valign="middle" style='padding:2.0pt 4.0pt;border:none;'><p class="MsoNormal" style='margin:0;'>&nbsp;</p></td>`
+        : "";
+    rows.push(`<tr>${tds}${pad}</tr>`);
+  }
+
+  return `<table class="MsoNormalTable photo-row" border="0" cellspacing="0" cellpadding="0"
+        style='border-collapse:collapse;border:none;width:100%;'>
+        ${rows.join("\n        ")}
+      </table>`;
+}
+
+/**
  * SM-005 / template photo table: 1 col × 2 rows, BorderStyle.Single / 0.5pt.
  * Images use data: URIs (proven on Word desktop before MHTML format PRs).
+ * One block = one or more photos + one caption (multi-photo under shared border).
  */
-function photoTableHtml(imgSrc, caption, index) {
+function photoTableHtml(imgSrcs, caption, index) {
+  const srcs = Array.isArray(imgSrcs) ? imgSrcs : [imgSrcs];
   const cell =
     "border:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;padding:4.0pt 4.0pt 4.0pt 4.0pt";
   return `
@@ -82,10 +156,7 @@ function photoTableHtml(imgSrc, caption, index) {
   style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;width:100%;margin:10.0pt 0;'>
   <tr>
     <td valign="top" style='width:100%;${cell}'>
-      <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0;'>
-        <img width="520" src="${imgSrc}" alt="photo ${index + 1}"
-          style='width:520px;max-width:100%;height:auto;'/>
-      </p>
+      ${photoImagesCellHtml(srcs, index)}
     </td>
   </tr>
   <tr>
@@ -167,9 +238,16 @@ export function buildSiteMemoHtml(payload) {
 
   const photoBlocks = Array.isArray(payload.photo_blocks) ? payload.photo_blocks : [];
   const photosHtml = photoBlocks
-    .map((block, i) =>
-      photoTableHtml(dataUriFromFile(block.absolutePath), block.caption || "", i)
-    )
+    .map((block, i) => {
+      const paths =
+        Array.isArray(block.absolutePaths) && block.absolutePaths.length
+          ? block.absolutePaths
+          : block.absolutePath
+            ? [block.absolutePath]
+            : [];
+      const srcs = paths.map((p) => dataUriFromFile(p));
+      return photoTableHtml(srcs, block.caption || "", i);
+    })
     .join("\n");
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office"

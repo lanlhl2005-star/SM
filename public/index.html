@@ -27,13 +27,19 @@
         <select id="daySelect"></select>
       </label>
       <div id="photoGrid" class="photo-grid"></div>
-      <p class="hint">Pick a backup group, then a day. Click a photo to add it as a photo block. Order below = order in the memo.</p>
+      <div class="select-actions">
+        <span id="selectCount" class="hint">None selected</span>
+        <button type="button" id="addOneBlockBtn" disabled title="One bordered group, shared caption">Add as one block</button>
+        <button type="button" id="addEachBtn" disabled title="One photo + caption each">Add each separately</button>
+        <button type="button" id="clearSelectBtn" disabled>Clear</button>
+      </div>
+      <p class="hint">Select one or more photos, then <b>Add as one block</b> (shared border + one caption) or <b>Add each separately</b>. Order in section 2 = order in the memo.</p>
     </section>
 
     <section class="panel" aria-labelledby="blocks-heading">
       <h2 id="blocks-heading">2. Photo blocks</h2>
       <div id="blocks" class="blocks"></div>
-      <p id="blocksEmpty" class="hint">No photos selected yet.</p>
+      <p id="blocksEmpty" class="hint">No photo blocks yet — select photos above, then add as one block or separately.</p>
     </section>
 
     <section class="panel" aria-labelledby="fields-heading">
