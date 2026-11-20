@@ -4,7 +4,9 @@ const state = {
   days: [],
   day: "",
   photos: [],
+  /** Pending multi-select in the browse grid (not yet a photo block). */
   selected: new Set(),
+  /** Ordered photo blocks: each { images: [{relativePath,name}], caption }. */
   blocks: [],
   defaults: null,
   browseError: null,
@@ -30,6 +32,14 @@ async function api(url, options) {
 
 function photoUrl(rel) {
   return `/api/photo-file?path=${encodeURIComponent(rel)}`;
+}
+
+function usedPaths() {
+  const used = new Set();
+  for (const b of state.blocks) {
+    for (const img of b.images) used.add(img.relativePath);
+  }
+  return used;
 }
 
 function renderPathMeta() {
@@ -102,30 +112,99 @@ function renderDays() {
   sel.value = state.day;
 }
 
+function defaultCaptionFor(photos) {
+  if (photos.length === 1) {
+    return `Photo of ${photos[0].name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ")}`;
+  }
+  return `Photos (${photos.length})`;
+}
+
 function renderPhotos() {
   const grid = $("photoGrid");
   grid.innerHTML = "";
+  const used = usedPaths();
   for (const p of state.photos) {
+    const inBlock = used.has(p.relativePath);
+    const pending = state.selected.has(p.relativePath);
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "photo-card" + (state.selected.has(p.relativePath) ? " selected" : "");
-    btn.title = "Add to photo blocks";
+    btn.className =
+      "photo-card" +
+      (pending ? " selected" : "") +
+      (inBlock ? " in-block" : "");
+    btn.disabled = inBlock;
+    btn.title = inBlock
+      ? "Already in a photo block"
+      : pending
+        ? "Click to deselect"
+        : "Click to select";
     btn.innerHTML = `<img src="${photoUrl(p.relativePath)}" alt=""/><span>${escape(p.name)}</span>`;
-    btn.addEventListener("click", () => addBlock(p));
+    btn.addEventListener("click", () => toggleSelect(p));
     grid.appendChild(btn);
   }
+  renderSelectActions();
 }
 
-function addBlock(photo) {
-  if (state.blocks.some((b) => b.image === photo.relativePath)) return;
-  state.selected.add(photo.relativePath);
+function toggleSelect(photo) {
+  if (usedPaths().has(photo.relativePath)) return;
+  if (state.selected.has(photo.relativePath)) {
+    state.selected.delete(photo.relativePath);
+  } else {
+    state.selected.add(photo.relativePath);
+  }
+  renderPhotos();
+  // Refresh "+ selected" enable state on existing blocks.
+  if (state.blocks.length) renderBlocks();
+}
+
+function selectedPhotos() {
+  return state.photos.filter((p) => state.selected.has(p.relativePath));
+}
+
+function renderSelectActions() {
+  const n = state.selected.size;
+  const countEl = $("selectCount");
+  if (countEl) countEl.textContent = n ? `${n} selected` : "None selected";
+  const one = $("addOneBlockBtn");
+  const each = $("addEachBtn");
+  const clear = $("clearSelectBtn");
+  if (one) one.disabled = n === 0;
+  if (each) each.disabled = n === 0;
+  if (clear) clear.disabled = n === 0;
+}
+
+function addAsOneBlock() {
+  const photos = selectedPhotos();
+  if (!photos.length) return;
   state.blocks.push({
-    image: photo.relativePath,
-    name: photo.name,
-    caption: `Photo of ${photo.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ")}`,
+    images: photos.map((p) => ({
+      relativePath: p.relativePath,
+      name: p.name,
+    })),
+    caption: defaultCaptionFor(photos),
   });
+  state.selected.clear();
   renderPhotos();
   renderBlocks();
+}
+
+function addEachSeparately() {
+  const photos = selectedPhotos();
+  if (!photos.length) return;
+  for (const p of photos) {
+    state.blocks.push({
+      images: [{ relativePath: p.relativePath, name: p.name }],
+      caption: defaultCaptionFor([p]),
+    });
+  }
+  state.selected.clear();
+  renderPhotos();
+  renderBlocks();
+}
+
+function clearSelection() {
+  state.selected.clear();
+  renderPhotos();
 }
 
 function moveBlock(index, delta) {
@@ -138,8 +217,32 @@ function moveBlock(index, delta) {
 }
 
 function removeBlock(index) {
-  const [removed] = state.blocks.splice(index, 1);
-  if (removed) state.selected.delete(removed.image);
+  state.blocks.splice(index, 1);
+  renderPhotos();
+  renderBlocks();
+}
+
+function removeImageFromBlock(blockIndex, imageIndex) {
+  const block = state.blocks[blockIndex];
+  if (!block) return;
+  block.images.splice(imageIndex, 1);
+  if (!block.images.length) {
+    state.blocks.splice(blockIndex, 1);
+  }
+  renderPhotos();
+  renderBlocks();
+}
+
+function addSelectedToBlock(blockIndex) {
+  const photos = selectedPhotos();
+  if (!photos.length) return;
+  const block = state.blocks[blockIndex];
+  if (!block) return;
+  for (const p of photos) {
+    if (block.images.some((img) => img.relativePath === p.relativePath)) continue;
+    block.images.push({ relativePath: p.relativePath, name: p.name });
+  }
+  state.selected.clear();
   renderPhotos();
   renderBlocks();
 }
@@ -148,18 +251,30 @@ function renderBlocks() {
   const root = $("blocks");
   root.innerHTML = "";
   $("blocksEmpty").hidden = state.blocks.length > 0;
+  const hasPending = state.selected.size > 0;
   state.blocks.forEach((b, i) => {
     const el = document.createElement("div");
     el.className = "block";
+    const thumbs = b.images
+      .map(
+        (img, j) =>
+          `<div class="thumb">
+            <img src="${photoUrl(img.relativePath)}" alt=""/>
+            <button type="button" class="thumb-rm" data-rm-img="${i}:${j}" title="Remove photo">×</button>
+          </div>`
+      )
+      .join("");
+    const names = b.images.map((img) => img.name).join(", ");
     el.innerHTML = `
-      <img src="${photoUrl(b.image)}" alt=""/>
+      <div class="thumbs">${thumbs}</div>
       <div>
-        <div class="meta">#${i + 1} · ${escape(b.name || b.image)}</div>
-        <textarea data-i="${i}" placeholder="Caption"></textarea>
+        <div class="meta">#${i + 1} · ${b.images.length} photo${b.images.length === 1 ? "" : "s"} · ${escape(names)}</div>
+        <textarea data-i="${i}" placeholder="Caption for this bordered group"></textarea>
       </div>
       <div class="block-actions">
         <button type="button" data-up="${i}">↑</button>
         <button type="button" data-down="${i}">↓</button>
+        <button type="button" data-add-sel="${i}" ${hasPending ? "" : "disabled"} title="Add currently selected photos to this block">+ selected</button>
         <button type="button" data-rm="${i}">Remove</button>
       </div>`;
     const ta = el.querySelector("textarea");
@@ -170,6 +285,15 @@ function renderBlocks() {
     el.querySelector("[data-up]").addEventListener("click", () => moveBlock(i, -1));
     el.querySelector("[data-down]").addEventListener("click", () => moveBlock(i, 1));
     el.querySelector("[data-rm]").addEventListener("click", () => removeBlock(i));
+    el.querySelector("[data-add-sel]").addEventListener("click", () =>
+      addSelectedToBlock(i)
+    );
+    el.querySelectorAll("[data-rm-img]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const [bi, ii] = btn.getAttribute("data-rm-img").split(":").map(Number);
+        removeImageFromBlock(bi, ii);
+      });
+    });
     root.appendChild(el);
   });
   updateFolderPreview();
@@ -248,6 +372,11 @@ async function loadPhotos(group, day) {
     `/api/photos?group=${encodeURIComponent(group)}&day=${encodeURIComponent(day)}`
   );
   state.photos = data.photos;
+  // Drop pending selections that are no longer in this day grid.
+  const alive = new Set(state.photos.map((p) => p.relativePath));
+  for (const rel of [...state.selected]) {
+    if (!alive.has(rel)) state.selected.delete(rel);
+  }
   renderPhotos();
 }
 
@@ -279,10 +408,15 @@ async function submit() {
       copy_to: $("copyTo").value,
       body_intro: $("bodyIntro").value,
       body_items: bullets,
-      photo_blocks: state.blocks.map((b) => ({
-        image: b.image,
-        caption: b.caption,
-      })),
+      photo_blocks: state.blocks.map((b) => {
+        const images = b.images.map((img) => img.relativePath);
+        return {
+          // Keep image for back-compat with older createDraft paths.
+          image: images[0],
+          images,
+          caption: b.caption,
+        };
+      }),
     };
     const created = await api("/api/drafts", {
       method: "POST",
@@ -294,7 +428,7 @@ async function submit() {
       `Folder: ${created.folder_path}\n` +
       `File:   ${created.file_path}\n` +
       `Memo #: ${created.memo_number}  (status Draft — never Submitted)\n` +
-      `Photos: ${created.photo_count}\n\n` +
+      `Photo blocks: ${created.photo_count}\n\n` +
       `Open the .doc in Word to review, then rename the folder to (Submitted) when issued.`;
     await loadDefaults();
   } catch (err) {
@@ -312,6 +446,9 @@ $("daySelect").addEventListener("change", (e) =>
 $("subject").addEventListener("input", updateFolderPreview);
 $("shortSubject").addEventListener("input", updateFolderPreview);
 $("submitBtn").addEventListener("click", submit);
+$("addOneBlockBtn").addEventListener("click", addAsOneBlock);
+$("addEachBtn").addEventListener("click", addEachSeparately);
+$("clearSelectBtn").addEventListener("click", clearSelection);
 
 await loadDefaults();
 await loadGroups();
