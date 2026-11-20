@@ -79,14 +79,25 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
       "inline style must not nest double-quotes inside double-quoted attributes"
     );
 
-    // Template-like routing (space columns), not an HTML routing table
-    assert.match(html, /From/);
+    // Borderless routing table: To / Company / Copy to share left edge + colon column
+    assert.match(html, /table class="MsoNormalTable routing"/);
+    assert.match(html, /table class="MsoNormalTable routing-pair"/);
+    assert.match(html, />From</);
+    assert.match(html, />To</);
+    assert.match(html, />Company</);
+    assert.match(html, />Copy to</);
     assert.match(html, /Our Ref/);
-    assert.doesNotMatch(html, /table class="routing"/);
+    // Right-column labels appear in order with dedicated colon cells
+    const toIdx = html.indexOf(">To<");
+    const companyIdx = html.indexOf(">Company<");
+    const copyIdx = html.indexOf(">Copy to<");
+    assert.ok(toIdx > 0 && companyIdx > toIdx && copyIdx > companyIdx);
 
-    // Project / Subject underline
-    assert.match(html, /<u><b>Project:<\/b><\/u>/);
-    assert.match(html, /<u><b>Subject:<\/b><\/u>/);
+    // Project: whole line underline only; Subject: whole line bold + underline
+    assert.match(html, /<u>Project: Framework Procurement Project/);
+    assert.doesNotMatch(html, /<u><b>Project:/);
+    assert.doesNotMatch(html, /<b>Project:/);
+    assert.match(html, /<u><b>Subject: Format match smoke<\/b><\/u>/);
 
     // SM-005 dash bullets (not <ul>)
     assert.match(html, /- Temporary storage area at L1/);
@@ -164,7 +175,9 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
     assert.match(text, /data:image\/png;base64,/);
     assert.match(text, /Yours faithfully,/);
     assert.match(text, /Delivery Note/);
-    assert.match(text, /<u><b>Subject:<\/b><\/u>/);
+    assert.match(text, /<u><b>Subject: Notice of Delivery format test<\/b><\/u>/);
+    assert.match(text, /<u>Project: /);
+    assert.doesNotMatch(text, /<b>Project:/);
     assert.match(text, /mso-ascii-font-family:Calibri/);
     const verified = verifyWordHtmlImageEmbeds(text);
     assert.equal(verified.imageCount, 2);

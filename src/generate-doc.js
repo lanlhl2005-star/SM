@@ -168,23 +168,90 @@ function photoTableHtml(imgSrcs, caption, index) {
 }
 
 /**
- * Space-padded two-column routing block — matches site-memo-template.doc /
- * SM-005 paragraph layout (not an HTML table).
+ * Two-column routing meta — borderless Word table so right-column labels
+ * (To / Company / Copy to) share one left edge and colons align. Space-padded
+ * paragraphs drift under Calibri (proportional); table cells do not.
+ * Chinese label rows sit under each English pair (template / SM-005).
  */
-function routingHtml(payload, locked, copyTo) {
-  const fromLine = `From&nbsp;&nbsp;&nbsp;:&nbsp;${escapeHtml(locked.from_name)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;To&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;&nbsp;${escapeHtml(locked.to_names)}`;
-  const dateLine = `Date&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;${escapeHtml(payload.date)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Company:&nbsp;&nbsp;${escapeHtml(locked.company)}`;
-  const refLine = `Our Ref.&nbsp;:&nbsp;${escapeHtml(locked.our_ref_prefix)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Copy to&nbsp;&nbsp;:&nbsp;&nbsp;${escapeHtml(copyTo)}`;
-  const numLine = `編號&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${escapeHtml(payload.memo_number)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;副本致`;
+function routingCell(inner, styleExtra = "") {
+  return `<td valign="top" style='border:none;padding:0 4.0pt 0 0;${styleExtra}'>${inner}</td>`;
+}
 
-  return [
-    p("margin:0;", fromLine),
-    p("margin:0;font-size:10.0pt;mso-fareast-font-family:PMingLiU;", "由&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;致"),
-    p("margin:0;", dateLine),
-    p("margin:0;font-size:10.0pt;mso-fareast-font-family:PMingLiU;", "日期&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;公司"),
-    p("margin:0;", refLine),
-    p("margin:0 0 10.0pt 0;font-size:10.0pt;mso-fareast-font-family:PMingLiU;", numLine),
-  ].join("\n");
+function routingLabelValue(label, value, { zh = false, colon = true } = {}) {
+  const labelStyle = zh
+    ? `${FONT_CSS};font-size:10.0pt;mso-fareast-font-family:PMingLiU;margin:0;`
+    : `${FONT_CSS};font-size:${FONT_SIZE};margin:0;`;
+  const valueStyle = zh
+    ? `${FONT_CSS};font-size:10.0pt;mso-fareast-font-family:PMingLiU;margin:0;`
+    : `${FONT_CSS};font-size:${FONT_SIZE};margin:0;`;
+  // Fixed-width label + colon cells → vertical align across To/Company/Copy to.
+  // ZH rows under English labels have no colon (template / SM-005).
+  const colonCell = colon
+    ? routingCell(`<p class="MsoNormal" style='${labelStyle}'>:</p>`, "width:10pt;")
+    : routingCell(`<p class="MsoNormal" style='${labelStyle}'>&nbsp;</p>`, "width:10pt;");
+  return `<table class="MsoNormalTable routing-pair" border="0" cellspacing="0" cellpadding="0"
+      style='border-collapse:collapse;border:none;width:100%;'>
+      <tr>
+        ${routingCell(`<p class="MsoNormal" style='${labelStyle}'>${label}</p>`, "width:56pt;")}
+        ${colonCell}
+        ${routingCell(`<p class="MsoNormal" style='${valueStyle}'>${value || "&nbsp;"}</p>`)}
+      </tr>
+    </table>`;
+}
+
+function routingHtml(payload, locked, copyTo) {
+  const half = "width:50%;border:none;padding:0 6.0pt 0 0;";
+  const rows = [
+    // From / To
+    [
+      routingLabelValue("From", escapeHtml(locked.from_name)),
+      routingLabelValue("To", escapeHtml(locked.to_names)),
+    ],
+    // 由 / 致
+    [
+      routingLabelValue("由", "", { zh: true, colon: false }),
+      routingLabelValue("致", "", { zh: true, colon: false }),
+    ],
+    // Date / Company
+    [
+      routingLabelValue("Date", escapeHtml(payload.date)),
+      routingLabelValue("Company", escapeHtml(locked.company)),
+    ],
+    // 日期 / 公司
+    [
+      routingLabelValue("日期", "", { zh: true, colon: false }),
+      routingLabelValue("公司", "", { zh: true, colon: false }),
+    ],
+    // Our Ref. / Copy to
+    [
+      routingLabelValue("Our Ref.", escapeHtml(locked.our_ref_prefix)),
+      routingLabelValue("Copy to", escapeHtml(copyTo)),
+    ],
+    // 編號 + memo number / 副本致
+    [
+      routingLabelValue("編號", escapeHtml(payload.memo_number), {
+        zh: true,
+        colon: false,
+      }),
+      routingLabelValue("副本致", "", { zh: true, colon: false }),
+    ],
+  ];
+
+  const trs = rows
+    .map(([left, right], i) => {
+      const last = i === rows.length - 1;
+      const pad = last ? "padding:0 6.0pt 10.0pt 0;" : "padding:0 6.0pt 0 0;";
+      return `<tr>
+    <td valign="top" style='${half}${last ? "padding-bottom:10.0pt;" : ""}'>${left}</td>
+    <td valign="top" style='width:50%;border:none;${pad}'>${right}</td>
+  </tr>`;
+    })
+    .join("\n");
+
+  return `<table class="MsoNormalTable routing" border="0" cellspacing="0" cellpadding="0"
+  style='border-collapse:collapse;border:none;width:100%;margin:0;'>
+  ${trs}
+</table>`;
 }
 
 function bodyHtml(payload) {
@@ -307,10 +374,10 @@ xmlns="http://www.w3.org/TR/REC-html40">
 ${routingHtml(payload, locked, copyTo)}
 
 <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:10.0pt 0 6.0pt 0;'>
-  <u><b>Project:</b></u> ${escapeHtml(locked.project_title)}
+  <u>Project: ${escapeHtml(locked.project_title)}</u>
 </p>
 <p class="MsoNormal" style='${FONT_CSS};font-size:${FONT_SIZE};margin:0 0 10.0pt 0;'>
-  <u><b>Subject:</b></u> ${escapeHtml(payload.subject)}
+  <u><b>Subject: ${escapeHtml(payload.subject)}</b></u>
 </p>
 
 ${bodyHtml(payload)}
