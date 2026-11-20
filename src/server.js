@@ -4,6 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, envFileExists, uncMapSuggestion, uncPathRewrites } from "./config.js";
 import { createDraftMemo } from "./create-draft.js";
+import {
+  createDraftUiAuth,
+  resolveDraftUiPassword,
+} from "./draft-ui-auth.js";
 import { formatDocSeq, formatFolderNn, nextMemoSequence } from "./memo-number.js";
 import {
   defaultPhotoGroup,
@@ -42,8 +46,15 @@ if (!envFileExists) {
 
 ensureRoots();
 
+const draftUiAuth = createDraftUiAuth({
+  password: resolveDraftUiPassword(),
+});
+
 const app = express();
 app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: false, limit: "32kb" }));
+draftUiAuth.mountLoginRoutes(app);
+app.use(draftUiAuth.middleware);
 app.use(express.static(publicDir));
 
 app.get("/api/health", (_req, res) => {
@@ -161,6 +172,13 @@ app.get("/api/open-hint", (req, res) => {
 app.listen(config.port, config.host, () => {
   console.log(`Site Memo Draft UI  http://${config.host}:${config.port}`);
   console.log(`  mode: ${config.useMock ? "MOCK" : "LIVE"} (USE_MOCK=${config.useMock})`);
+  console.log(
+    `  auth: ${
+      draftUiAuth.enabled
+        ? "ON (DRAFT_UI_PASSWORD / UI_PASSWORD set — login required)"
+        : "OFF (no DRAFT_UI_PASSWORD — open local access; set password before tunnel)"
+    }`
+  );
   console.log(`  photos: ${config.photoBackupRoot}`);
   console.log(`  site memos: ${config.siteMemoRoot}`);
   for (const line of uncPathRewrites) {

@@ -18,15 +18,28 @@ Open **http://127.0.0.1:3847** in a browser.
 
 Default Draft UI port is **3847** (`config/default.json`); override with `PORT` in `.env` if needed. The `tunnel` script below targets `127.0.0.1:3847` — if you change `PORT`, point cloudflared at the same port.
 
+### Draft UI password (recommended before tunnel)
+
+By default the Draft UI is **open** when `DRAFT_UI_PASSWORD` (or alias `UI_PASSWORD`) is unset/empty — fine for local-only use on `127.0.0.1`.
+
+When exposing the UI (especially via Cloudflare quick tunnel), set a password in **local** `.env` only (do not commit the real value):
+
+```env
+DRAFT_UI_PASSWORD=your-secret-here
+```
+
+Then **restart** Draft UI (`Ctrl+C`, then `npm start`) so the gate loads. With a password set, every HTML page and `/api/*` route requires sign-in (cookie session after a small login form at `/login`).
+
 ### Share Draft UI over the internet (Cloudflare quick tunnel)
 
-Start the Draft UI first (`npm start`), then in another terminal:
+1. Set `DRAFT_UI_PASSWORD` in `.env` and restart `npm start`.
+2. In another terminal:
 
 ```bat
 npm run tunnel
 ```
 
-Copy the printed `https://….trycloudflare.com` URL from the cloudflared output. Treat that URL as a **secret** (anyone with it can reach your local Draft UI). Press **Ctrl+C** to stop the tunnel. No Cloudflare account is required for quick tunnels (`npx` downloads `cloudflared` on demand).
+Copy the printed `https://….trycloudflare.com` URL from the cloudflared output. Open it, enter the Draft UI password on the login page. Keep the tunnel running while colleagues use the link. Press **Ctrl+C** to stop the tunnel. No Cloudflare account is required for quick tunnels (`npx` downloads `cloudflared` on demand).
 
 ### Photo backup — Baileys linked device (primary)
 
