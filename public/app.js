@@ -140,6 +140,208 @@ function tagSummary(p) {
   return bits.join(" · ");
 }
 
+/** @type {null | { kind: 'gallery'|'thumb'|'block', relativePath?: string, name?: string, blockIndex?: number, imageIndex?: number }} */
+let activeDrag = null;
+/** Skip the click that follows a successful drag on gallery cards. */
+let suppressNextPhotoClick = false;
+
+function clearDropHighlights() {
+  document
+    .querySelectorAll(".drop-target, .dragging")
+    .forEach((el) => el.classList.remove("drop-target", "dragging"));
+}
+
+function endDrag() {
+  activeDrag = null;
+  clearDropHighlights();
+}
+
+function photoFromPath(relativePath) {
+  return state.photos.find((p) => p.relativePath === relativePath) || null;
+}
+
+function findImageLocation(relativePath) {
+  for (let bi = 0; bi < state.blocks.length; bi++) {
+    const ii = state.blocks[bi].images.findIndex(
+      (img) => img.relativePath === relativePath
+    );
+    if (ii >= 0) return { blockIndex: bi, imageIndex: ii };
+  }
+  return null;
+}
+
+/**
+ * Move or insert an image into a target block at imageIndex (append if null/undefined).
+ * @returns {boolean}
+ */
+function placeImageInBlock(img, toBlockIndex, toImageIndex) {
+  if (!img?.relativePath || toBlockIndex < 0 || toBlockIndex >= state.blocks.length) {
+    return false;
+  }
+  const existing = findImageLocation(img.relativePath);
+  let targetBlock = toBlockIndex;
+  let targetIndex =
+    toImageIndex == null || toImageIndex < 0
+      ? state.blocks[targetBlock].images.length
+      : toImageIndex;
+
+  if (existing) {
+    const { blockIndex: fromB, imageIndex: fromI } = existing;
+    if (fromB === targetBlock && (fromI === targetIndex || fromI === targetIndex - 1)) {
+      return false;
+    }
+    const [moved] = state.blocks[fromB].images.splice(fromI, 1);
+    if (fromB === targetBlock && fromI < targetIndex) targetIndex -= 1;
+    if (!state.blocks[fromB].images.length) {
+      state.blocks.splice(fromB, 1);
+      if (fromB < targetBlock) targetBlock -= 1;
+      if (targetBlock < 0 || targetBlock >= state.blocks.length) {
+        // Source block removed and target vanished — recreate as new block.
+        state.blocks.push({
+          images: [moved],
+          caption: defaultCaptionFor([moved]),
+        });
+        return true;
+      }
+    }
+    const block = state.blocks[targetBlock];
+    const clamped = Math.max(0, Math.min(targetIndex, block.images.length));
+    block.images.splice(clamped, 0, moved);
+    return true;
+  }
+
+  if (usedPaths().has(img.relativePath)) return false;
+  const block = state.blocks[targetBlock];
+  const clamped = Math.max(0, Math.min(targetIndex, block.images.length));
+  block.images.splice(clamped, 0, {
+    relativePath: img.relativePath,
+    name: img.name,
+  });
+  state.selected.delete(img.relativePath);
+  return true;
+}
+
+function createBlockFromGallery(relativePath, name, atIndex) {
+  if (usedPaths().has(relativePath)) return false;
+  const photo = photoFromPath(relativePath);
+  const img = {
+    relativePath,
+    name: name || photo?.name || relativePath.split("/").pop(),
+  };
+  const block = {
+    images: [img],
+    caption: defaultCaptionFor([img]),
+  };
+  if (atIndex == null || atIndex < 0 || atIndex > state.blocks.length) {
+    state.blocks.push(block);
+  } else {
+    state.blocks.splice(atIndex, 0, block);
+  }
+  state.selected.delete(relativePath);
+  return true;
+}
+
+function moveBlockTo(fromIndex, toIndex) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= state.blocks.length ||
+    toIndex >= state.blocks.length
+  ) {
+    return false;
+  }
+  const [block] = state.blocks.splice(fromIndex, 1);
+  state.blocks.splice(toIndex, 0, block);
+  return true;
+}
+
+function moveImageWithinBlock(blockIndex, fromIndex, delta) {
+  const block = state.blocks[blockIndex];
+  if (!block) return;
+  const to = fromIndex + delta;
+  if (to < 0 || to >= block.images.length) return;
+  const tmp = block.images[fromIndex];
+  block.images[fromIndex] = block.images[to];
+  block.images[to] = tmp;
+  renderBlocks();
+}
+
+function applyDropOnBlock(blockIndex, beforeImageIndex) {
+  if (!activeDrag) return false;
+  if (activeDrag.kind === "gallery") {
+    return placeImageInBlock(
+      { relativePath: activeDrag.relativePath, name: activeDrag.name },
+      blockIndex,
+      beforeImageIndex
+    );
+  }
+  if (activeDrag.kind === "thumb") {
+    return placeImageInBlock(
+      { relativePath: activeDrag.relativePath, name: activeDrag.name },
+      blockIndex,
+      beforeImageIndex
+    );
+  }
+  if (activeDrag.kind === "block") {
+    return moveBlockTo(activeDrag.blockIndex, blockIndex);
+  }
+  return false;
+}
+
+function applyDropOnBlocksTray() {
+  if (!activeDrag) return false;
+  if (activeDrag.kind === "gallery") {
+    return createBlockFromGallery(activeDrag.relativePath, activeDrag.name);
+  }
+  if (activeDrag.kind === "thumb") {
+    const loc = findImageLocation(activeDrag.relativePath);
+    if (!loc) return false;
+    const [img] = state.blocks[loc.blockIndex].images.splice(loc.imageIndex, 1);
+    if (!state.blocks[loc.blockIndex].images.length) {
+      state.blocks.splice(loc.blockIndex, 1);
+    }
+    state.blocks.push({
+      images: [img],
+      caption: defaultCaptionFor([img]),
+    });
+    return true;
+  }
+  if (activeDrag.kind === "block") {
+    return moveBlockTo(activeDrag.blockIndex, state.blocks.length - 1);
+  }
+  return false;
+}
+
+function bindBlockDropTarget(el, blockIndex) {
+  el.addEventListener("dragover", (e) => {
+    if (!activeDrag) return;
+    if (
+      activeDrag.kind === "gallery" ||
+      activeDrag.kind === "thumb" ||
+      activeDrag.kind === "block"
+    ) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect =
+        activeDrag.kind === "gallery" ? "copy" : "move";
+      el.classList.add("drop-target");
+    }
+  });
+  el.addEventListener("dragleave", (e) => {
+    if (!el.contains(e.relatedTarget)) el.classList.remove("drop-target");
+  });
+  el.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = applyDropOnBlock(blockIndex, null);
+    endDrag();
+    if (ok) {
+      renderPhotos();
+      renderBlocks();
+    }
+  });
+}
+
 function renderPhotos() {
   const grid = $("photoGrid");
   grid.innerHTML = "";
@@ -148,6 +350,7 @@ function renderPhotos() {
     const isPdf = p.mediaType === "pdf" || p.pickable === false;
     const inBlock = used.has(p.relativePath);
     const pending = state.selected.has(p.relativePath);
+    const pickable = !isPdf && !inBlock;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className =
@@ -156,16 +359,17 @@ function renderPhotos() {
       (pending ? " selected" : "") +
       (inBlock ? " in-block" : "");
     btn.disabled = isPdf || inBlock;
+    btn.draggable = pickable;
     btn.title = isPdf
       ? "PDF — browse/filter only (not for Site Memo photo blocks)"
       : inBlock
         ? "Already in a photo block"
         : pending
-          ? "Click to deselect"
-          : "Click to select";
+          ? "Click to deselect · drag onto a photo block"
+          : "Click to select · drag onto a photo block";
     const mediaHtml = isPdf
       ? `<div class="pdf-placeholder" aria-hidden="true">PDF</div>`
-      : `<img src="${photoUrl(p.relativePath)}" alt=""/>`;
+      : `<img src="${photoUrl(p.relativePath)}" alt="" draggable="false"/>`;
     const badge = isPdf
       ? `<span class="media-badge">PDF</span>`
       : "";
@@ -173,8 +377,32 @@ function renderPhotos() {
     btn.innerHTML =
       `${badge}${mediaHtml}<span>${escape(p.name)}</span>` +
       (tags ? `<span class="tag-line" title="${escape(tags)}">${escape(tags)}</span>` : "");
-    if (!isPdf) {
-      btn.addEventListener("click", () => toggleSelect(p));
+    if (pickable) {
+      btn.addEventListener("click", () => {
+        if (suppressNextPhotoClick) {
+          suppressNextPhotoClick = false;
+          return;
+        }
+        toggleSelect(p);
+      });
+      btn.addEventListener("dragstart", (e) => {
+        activeDrag = {
+          kind: "gallery",
+          relativePath: p.relativePath,
+          name: p.name,
+        };
+        suppressNextPhotoClick = true;
+        btn.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "copyMove";
+        e.dataTransfer.setData("text/plain", p.relativePath);
+      });
+      btn.addEventListener("dragend", () => {
+        endDrag();
+        // Allow a short window so the following click is ignored.
+        setTimeout(() => {
+          suppressNextPhotoClick = false;
+        }, 50);
+      });
     }
     grid.appendChild(btn);
   }
@@ -316,27 +544,36 @@ function renderBlocks() {
   state.blocks.forEach((b, i) => {
     const el = document.createElement("div");
     el.className = "block";
+    el.dataset.blockIndex = String(i);
+    const multi = b.images.length > 1;
     const thumbs = b.images
-      .map(
-        (img, j) =>
-          `<div class="thumb">
-            <img src="${photoUrl(img.relativePath)}" alt=""/>
+      .map((img, j) => {
+        const reorderBtns = multi
+          ? `<div class="thumb-controls">
+              <button type="button" class="btn btn-ghost btn-icon" data-img-left="${i}:${j}" title="Move left" ${j === 0 ? "disabled" : ""}>←</button>
+              <button type="button" class="btn btn-ghost btn-icon" data-img-right="${i}:${j}" title="Move right" ${j === b.images.length - 1 ? "disabled" : ""}>→</button>
+            </div>`
+          : "";
+        return `<div class="thumb" draggable="true" data-thumb="${i}:${j}" title="Drag to reorder">
+            <img src="${photoUrl(img.relativePath)}" alt="" draggable="false"/>
             <button type="button" class="thumb-rm" data-rm-img="${i}:${j}" title="Remove photo">×</button>
-          </div>`
-      )
+            ${reorderBtns}
+          </div>`;
+      })
       .join("");
     const names = b.images.map((img) => img.name).join(", ");
     el.innerHTML = `
+      <div class="block-handle" draggable="true" title="Drag to reorder blocks" aria-label="Reorder block">⋮⋮</div>
       <div class="thumbs">${thumbs}</div>
       <div>
         <div class="meta">#${i + 1} · ${b.images.length} photo${b.images.length === 1 ? "" : "s"} · ${escape(names)}</div>
         <textarea data-i="${i}" placeholder="Caption for this bordered group"></textarea>
       </div>
       <div class="block-actions">
-        <button type="button" data-up="${i}">↑</button>
-        <button type="button" data-down="${i}">↓</button>
-        <button type="button" data-add-sel="${i}" ${hasPending ? "" : "disabled"} title="Add currently selected photos to this block">+ selected</button>
-        <button type="button" data-rm="${i}">Remove</button>
+        <button type="button" class="btn btn-ghost btn-icon" data-up="${i}" title="Move block up">↑</button>
+        <button type="button" class="btn btn-ghost btn-icon" data-down="${i}" title="Move block down">↓</button>
+        <button type="button" class="btn btn-secondary" data-add-sel="${i}" ${hasPending ? "" : "disabled"} title="Add currently selected photos to this block">+ selected</button>
+        <button type="button" class="btn btn-danger" data-rm="${i}">Remove</button>
       </div>`;
     const ta = el.querySelector("textarea");
     ta.value = b.caption;
@@ -350,13 +587,135 @@ function renderBlocks() {
       addSelectedToBlock(i)
     );
     el.querySelectorAll("[data-rm-img]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const [bi, ii] = btn.getAttribute("data-rm-img").split(":").map(Number);
         removeImageFromBlock(bi, ii);
       });
     });
+    el.querySelectorAll("[data-img-left]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [bi, ii] = btn.getAttribute("data-img-left").split(":").map(Number);
+        moveImageWithinBlock(bi, ii, -1);
+      });
+    });
+    el.querySelectorAll("[data-img-right]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [bi, ii] = btn.getAttribute("data-img-right").split(":").map(Number);
+        moveImageWithinBlock(bi, ii, 1);
+      });
+    });
+
+    const handle = el.querySelector(".block-handle");
+    handle.addEventListener("dragstart", (e) => {
+      activeDrag = { kind: "block", blockIndex: i };
+      el.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", `block:${i}`);
+      e.stopPropagation();
+    });
+    handle.addEventListener("dragend", () => endDrag());
+
+    const thumbsEl = el.querySelector(".thumbs");
+    thumbsEl.addEventListener("dragover", (e) => {
+      if (!activeDrag || (activeDrag.kind !== "gallery" && activeDrag.kind !== "thumb")) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect =
+        activeDrag.kind === "gallery" ? "copy" : "move";
+      thumbsEl.classList.add("drop-target");
+    });
+    thumbsEl.addEventListener("dragleave", (e) => {
+      if (!thumbsEl.contains(e.relatedTarget)) {
+        thumbsEl.classList.remove("drop-target");
+      }
+    });
+    thumbsEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ok = applyDropOnBlock(i, state.blocks[i].images.length);
+      endDrag();
+      if (ok) {
+        renderPhotos();
+        renderBlocks();
+      }
+    });
+
+    el.querySelectorAll(".thumb[data-thumb]").forEach((thumb) => {
+      const [bi, ii] = thumb.getAttribute("data-thumb").split(":").map(Number);
+      const img = state.blocks[bi]?.images[ii];
+      if (!img) return;
+      thumb.addEventListener("dragstart", (e) => {
+        activeDrag = {
+          kind: "thumb",
+          blockIndex: bi,
+          imageIndex: ii,
+          relativePath: img.relativePath,
+          name: img.name,
+        };
+        thumb.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", img.relativePath);
+        e.stopPropagation();
+      });
+      thumb.addEventListener("dragend", () => endDrag());
+      thumb.addEventListener("dragover", (e) => {
+        if (!activeDrag || (activeDrag.kind !== "thumb" && activeDrag.kind !== "gallery")) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        thumb.classList.add("drop-target");
+      });
+      thumb.addEventListener("dragleave", () => thumb.classList.remove("drop-target"));
+      thumb.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const ok = applyDropOnBlock(bi, ii);
+        endDrag();
+        if (ok) {
+          renderPhotos();
+          renderBlocks();
+        }
+      });
+    });
+
+    bindBlockDropTarget(el, i);
     root.appendChild(el);
   });
+
+  // Tray accepts gallery → new block (and empty-state drop).
+  if (!root.dataset.dndBound) {
+    root.dataset.dndBound = "1";
+    root.addEventListener("dragover", (e) => {
+      if (!activeDrag) return;
+      if (
+        activeDrag.kind === "gallery" ||
+        activeDrag.kind === "thumb" ||
+        activeDrag.kind === "block"
+      ) {
+        e.preventDefault();
+        root.classList.add("drop-target");
+      }
+    });
+    root.addEventListener("dragleave", (e) => {
+      if (!root.contains(e.relatedTarget)) root.classList.remove("drop-target");
+    });
+    root.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const ok = applyDropOnBlocksTray();
+      endDrag();
+      if (ok) {
+        renderPhotos();
+        renderBlocks();
+      }
+    });
+  }
+
   updateFolderPreview();
 }
 
