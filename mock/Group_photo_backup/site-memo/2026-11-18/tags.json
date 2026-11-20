@@ -1,0 +1,14 @@
+{
+  "files": {
+    "sample_delivery.pdf": {
+      "sender": "85291234567",
+      "sendDate": "2026-11-18 10:30:00",
+      "sendTs": 1794969000,
+      "caption": "delivery note",
+      "captions": ["delivery note"],
+      "mediaType": "pdf",
+      "fileName": "sample_delivery.pdf",
+      "msgKey": null
+    }
+  }
+}

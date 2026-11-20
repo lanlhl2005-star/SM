@@ -3,11 +3,11 @@
 Offline smoke layout matches live Baileys backups:
 
 ```text
-<group subject or alias>/YYYY-MM-DD/<photos>
-individual/YYYY-MM-DD/<photos>
+<group subject or alias>/YYYY-MM-DD/<photos and PDFs + *.tags.json>
+individual/YYYY-MM-DD/<photos and PDFs + *.tags.json>
 ```
 
-- `site-memo/` — sample photos for Draft UI / `npm run smoke` (also Desktop-watcher alias)
+- `site-memo/` — sample photos + a sample PDF (`sample_delivery.pdf`) with tags for Draft UI filters / `npm run smoke`
 - `LK Site Memo Sample/` — second group folder to exercise group picker
 - `individual/` — 1:1 chat sample
 

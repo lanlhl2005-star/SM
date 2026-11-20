@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Baileys linked-device WhatsApp photo backup for Site Memo.
+ * Baileys linked-device WhatsApp photo + PDF backup for Site Memo.
  *
  * Primary path: link once on a Windows PC, then run the daemon.
- * Saves incoming photos into PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\.
+ * Saves incoming photos and PDFs into PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\.
+ * Tags each file (sender, send date, nearby caption ±5 min) via .tags.json sidecars.
  * Group folders use the live WhatsApp group subject (sanitized); 1:1 → individual.
  * Does NOT send messages. Phone stays primary; Desktop daily use undisturbed.
  *
@@ -39,7 +40,7 @@ function baileys() {
 
 function printHelp() {
   const b = baileys();
-  console.log(`Site Memo — WhatsApp Baileys linked-device photo backup
+  console.log(`Site Memo — WhatsApp Baileys linked-device photo + PDF backup
 
 Usage:
   node src/wa-backup/index.js <command> [options]
@@ -47,7 +48,7 @@ Usage:
 
 Commands:
   link      Pair once (QR and/or pairing code). Persist auth and exit when connected.
-  run       Long-lived daemon: save incoming photos under PHOTO_BACKUP_ROOT.
+  run       Long-lived daemon: save incoming photos + PDFs under PHOTO_BACKUP_ROOT.
   health    Exit 0 if daemon heartbeat is fresh; else exit 1.
   help      Show this help.
 
@@ -364,7 +365,7 @@ async function cmdRun() {
 
     touchHeartbeat(b.heartbeatPath, { mode: "run", connection: "starting" });
     logger.info(
-      "Daemon running — incoming photos will be saved. Ctrl+C to stop."
+      "Daemon running — incoming photos + PDFs will be saved with tags. Ctrl+C to stop."
     );
   };
 

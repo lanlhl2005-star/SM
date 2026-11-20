@@ -10,6 +10,7 @@ const state = {
   blocks: [],
   defaults: null,
   browseError: null,
+  filters: { sender: "", date: "", text: "" },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -129,33 +130,59 @@ function defaultCaptionFor(photos) {
   return `Photos (${photos.length})`;
 }
 
+function tagSummary(p) {
+  const t = p.tags;
+  if (!t) return "";
+  const bits = [];
+  if (t.sender) bits.push(t.sender);
+  if (t.sendDate) bits.push(t.sendDate);
+  if (t.caption) bits.push(t.caption);
+  return bits.join(" · ");
+}
+
 function renderPhotos() {
   const grid = $("photoGrid");
   grid.innerHTML = "";
   const used = usedPaths();
   for (const p of state.photos) {
+    const isPdf = p.mediaType === "pdf" || p.pickable === false;
     const inBlock = used.has(p.relativePath);
     const pending = state.selected.has(p.relativePath);
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className =
       "photo-card" +
+      (isPdf ? " is-pdf" : "") +
       (pending ? " selected" : "") +
       (inBlock ? " in-block" : "");
-    btn.disabled = inBlock;
-    btn.title = inBlock
-      ? "Already in a photo block"
-      : pending
-        ? "Click to deselect"
-        : "Click to select";
-    btn.innerHTML = `<img src="${photoUrl(p.relativePath)}" alt=""/><span>${escape(p.name)}</span>`;
-    btn.addEventListener("click", () => toggleSelect(p));
+    btn.disabled = isPdf || inBlock;
+    btn.title = isPdf
+      ? "PDF — browse/filter only (not for Site Memo photo blocks)"
+      : inBlock
+        ? "Already in a photo block"
+        : pending
+          ? "Click to deselect"
+          : "Click to select";
+    const mediaHtml = isPdf
+      ? `<div class="pdf-placeholder" aria-hidden="true">PDF</div>`
+      : `<img src="${photoUrl(p.relativePath)}" alt=""/>`;
+    const badge = isPdf
+      ? `<span class="media-badge">PDF</span>`
+      : "";
+    const tags = tagSummary(p);
+    btn.innerHTML =
+      `${badge}${mediaHtml}<span>${escape(p.name)}</span>` +
+      (tags ? `<span class="tag-line" title="${escape(tags)}">${escape(tags)}</span>` : "");
+    if (!isPdf) {
+      btn.addEventListener("click", () => toggleSelect(p));
+    }
     grid.appendChild(btn);
   }
   renderSelectActions();
 }
 
 function toggleSelect(photo) {
+  if (photo.mediaType === "pdf" || photo.pickable === false) return;
   if (usedPaths().has(photo.relativePath)) return;
   if (state.selected.has(photo.relativePath)) {
     state.selected.delete(photo.relativePath);
@@ -168,7 +195,31 @@ function toggleSelect(photo) {
 }
 
 function selectedPhotos() {
-  return state.photos.filter((p) => state.selected.has(p.relativePath));
+  return state.photos.filter(
+    (p) =>
+      state.selected.has(p.relativePath) &&
+      p.mediaType !== "pdf" &&
+      p.pickable !== false
+  );
+}
+
+function readFiltersFromDom() {
+  state.filters = {
+    sender: ($("filterSender")?.value || "").trim(),
+    date: ($("filterDate")?.value || "").trim(),
+    text: ($("filterText")?.value || "").trim(),
+  };
+  return state.filters;
+}
+
+function filterQuery() {
+  const f = readFiltersFromDom();
+  const q = new URLSearchParams();
+  if (f.sender) q.set("sender", f.sender);
+  if (f.date) q.set("date", f.date);
+  if (f.text) q.set("text", f.text);
+  const s = q.toString();
+  return s ? `&${s}` : "";
 }
 
 function renderSelectActions() {
@@ -379,7 +430,7 @@ async function loadPhotos(group, day) {
   state.group = group;
   state.day = day;
   const data = await api(
-    `/api/photos?group=${encodeURIComponent(group)}&day=${encodeURIComponent(day)}`
+    `/api/photos?group=${encodeURIComponent(group)}&day=${encodeURIComponent(day)}${filterQuery()}`
   );
   state.photos = data.photos;
   // Drop pending selections that are no longer in this day grid.
@@ -387,7 +438,32 @@ async function loadPhotos(group, day) {
   for (const rel of [...state.selected]) {
     if (!alive.has(rel)) state.selected.delete(rel);
   }
+  // Never keep PDFs in the pending selection set.
+  for (const p of state.photos) {
+    if (
+      (p.mediaType === "pdf" || p.pickable === false) &&
+      state.selected.has(p.relativePath)
+    ) {
+      state.selected.delete(p.relativePath);
+    }
+  }
   renderPhotos();
+}
+
+function clearFilters() {
+  if ($("filterSender")) $("filterSender").value = "";
+  if ($("filterDate")) $("filterDate").value = "";
+  if ($("filterText")) $("filterText").value = "";
+  state.filters = { sender: "", date: "", text: "" };
+  if (state.group && state.day) loadPhotos(state.group, state.day);
+}
+
+let filterTimer = null;
+function onFilterInput() {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => {
+    if (state.group && state.day) loadPhotos(state.group, state.day);
+  }, 250);
 }
 
 async function loadDefaults() {
@@ -459,6 +535,10 @@ $("submitBtn").addEventListener("click", submit);
 $("addOneBlockBtn").addEventListener("click", addAsOneBlock);
 $("addEachBtn").addEventListener("click", addEachSeparately);
 $("clearSelectBtn").addEventListener("click", clearSelection);
+$("filterSender")?.addEventListener("input", onFilterInput);
+$("filterDate")?.addEventListener("input", onFilterInput);
+$("filterText")?.addEventListener("input", onFilterInput);
+$("clearFiltersBtn")?.addEventListener("click", clearFilters);
 
 /** @type {string | null} */
 let activeGuide = null;

@@ -4,6 +4,7 @@ import {
   buildMsgKey,
   classifyMessage,
   extractCaption,
+  extractTextBody,
   jidIsGroup,
   messageTs,
   shouldSaveMediaKind,
@@ -20,11 +21,21 @@ import { moveFile } from "./move-file.js";
 import { createDownloadQueue } from "./download-queue.js";
 import { getProcessed, markProcessed, saveState } from "./state.js";
 import { touchHeartbeat } from "./heartbeat.js";
+import {
+  buildMediaTags,
+  createChatEventBuffer,
+  extractNearbyCaptions,
+  formatSendDate,
+  mergeCaptionsIntoTags,
+  senderFromMessageKey,
+  writeMediaTags,
+} from "./tags.js";
 
 /**
  * Incoming media → PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\<file>
  * Group folder = live WhatsApp subject (sanitized); 1:1 → individual.
- * Incoming only; never sends. Patterns adapted from whatsapp-media-saver.
+ * Saves images + PDFs with tag sidecars. Incoming only; never sends.
+ * Patterns adapted from whatsapp-media-saver.
  */
 export function createPipeline({
   baileysCfg,
@@ -44,6 +55,12 @@ export function createPipeline({
   const groupNames = new Map();
   let dirty = false;
   let saveTimer = null;
+
+  const chatEvents = createChatEventBuffer({
+    windowSec: 5 * 60,
+  });
+
+  const timeZone = baileysCfg.timezone || "Asia/Hong_Kong";
 
   function scheduleSave() {
     dirty = true;
@@ -82,10 +99,48 @@ export function createPipeline({
     return destDir;
   }
 
+  function noteTextMessage(msg) {
+    const key = msg.key || {};
+    if (key.fromMe) return;
+    if (!msg.message) return;
+    const classified = classifyMessage(msg.message);
+    if (classified.kind !== "text") return;
+    const text = extractTextBody(classified.content);
+    if (!text) return;
+    const chatId = key.remoteJid;
+    const sender = senderFromMessageKey(key);
+    const ts = messageTs(msg);
+    chatEvents.pushEvent({ chatId, ts, sender, text, kind: "text" });
+
+    // Late caption: merge into recently saved media within ±5 minutes.
+    for (const m of chatEvents.mediaNeedingCaption({
+      chatId,
+      sender,
+      ts,
+      text,
+    })) {
+      try {
+        mergeCaptionsIntoTags(m.destPath, [text]);
+        logger.debug(
+          { file: path.basename(m.destPath), sender },
+          "merged nearby caption into tags"
+        );
+      } catch (err) {
+        logger.warn(
+          { err: err?.message, file: m.destPath },
+          "failed to merge caption into tags"
+        );
+      }
+    }
+  }
+
   async function handleIncomingMedia(msg) {
     const key = msg.key || {};
     if (key.fromMe) return; // incoming only — never touch outbound
     if (!msg.message) return;
+
+    // Always harvest text for the ±5 min caption window (even when not saving).
+    noteTextMessage(msg);
 
     const classified = classifyMessage(msg.message);
     if (!shouldSaveMediaKind(classified.kind, baileysCfg.mediaTypes)) {
@@ -102,6 +157,7 @@ export function createPipeline({
     const chatId = key.remoteJid;
     const isGroup = jidIsGroup(chatId);
     const ts = messageTs(msg);
+    const sender = senderFromMessageKey(key);
     const shortId = (key.id || "unknown").slice(-8);
     const originalFileName =
       classified.content?.fileName || classified.content?.filename || null;
@@ -112,6 +168,17 @@ export function createPipeline({
       fileName: originalFileName,
       mediaType: classified.kind,
     });
+
+    // Own caption also feeds the event buffer (same-sender window).
+    if (caption) {
+      chatEvents.pushEvent({
+        chatId,
+        ts,
+        sender,
+        text: caption,
+        kind: "caption",
+      });
+    }
 
     let subject = null;
     if (isGroup) {
@@ -125,7 +192,7 @@ export function createPipeline({
     const groupFolder = mapped.folder;
     const mapReason = mapped.reason;
 
-    const day = dayFolderFromTs(ts, baileysCfg.timezone || "Asia/Hong_Kong");
+    const day = dayFolderFromTs(ts, timeZone);
     const destDir = ensureDestDir(groupFolder, day);
     const fileName = nextAvailableFileName(stem, ext, (n) =>
       fs.existsSync(path.join(destDir, n))
@@ -158,11 +225,42 @@ export function createPipeline({
         // copy-into-dest-.moving then rename within the share (avoids EXDEV).
         await moveFile(tmpPath, finalAbs);
 
+        const captions = extractNearbyCaptions({
+          mediaTs: ts,
+          mediaSender: sender,
+          mediaCaption: caption,
+          events: chatEvents.eventsFor(chatId),
+        });
+        const tags = buildMediaTags({
+          sender,
+          sendTs: ts,
+          sendDate: formatSendDate(ts, timeZone),
+          captions,
+          mediaType: classified.kind,
+          fileName: path.basename(finalAbs),
+          msgKey,
+        });
+        try {
+          writeMediaTags(finalAbs, tags);
+        } catch (tagErr) {
+          logger.warn(
+            { err: tagErr?.message, file: finalAbs },
+            "saved media but failed to write tags sidecar"
+          );
+        }
+        chatEvents.rememberSavedMedia({
+          chatId,
+          sender,
+          ts,
+          destPath: finalAbs,
+        });
+
         markProcessed(state, msgKey, {
           status: "saved",
           group: groupFolder,
           day,
           dest: finalAbs,
+          mediaType: classified.kind,
         });
         scheduleSave();
 
@@ -170,9 +268,10 @@ export function createPipeline({
           {
             file: path.join(groupFolder, day, path.basename(finalAbs)),
             type: classified.kind,
+            sender,
             mapReason,
           },
-          "saved photo"
+          classified.kind === "pdf" ? "saved pdf" : "saved photo"
         );
       } catch (err) {
         try {
@@ -236,5 +335,6 @@ export function createPipeline({
     touch,
     queue,
     handleIncomingMedia,
+    chatEvents,
   };
 }

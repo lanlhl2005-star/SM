@@ -2,7 +2,7 @@
 
 Local web UI for **LK-P01043** site memos: browse WhatsApp group photo backups, group photos into ordered `photo_blocks` with captions, fill date/subject/body, and write an unlocked editable **Draft** `.doc` under the Site Memo share.
 
-**Primary photo intake:** Baileys **linked-device** backup (`npm run wa-link` / `npm run wa-backup`) saves incoming group photos into `Group_photo_backup\<WhatsApp group name>\YYYY-MM-DD\` (1:1 chats → `individual\YYYY-MM-DD\`) without disturbing phone or Desktop daily use. The older Desktop media-cache watcher is optional/deprecated. Send-to-WhatsApp is **out of scope** (on hold).
+**Primary photo intake:** Baileys **linked-device** backup (`npm run wa-link` / `npm run wa-backup`) saves incoming **photos and PDFs** into `Group_photo_backup\<WhatsApp group name>\YYYY-MM-DD\` (1:1 chats → `individual\YYYY-MM-DD\`) without disturbing phone or Desktop daily use. Each saved file gets durable tags (sender number, send date/time, nearby caption/message within ±5 minutes). The Draft UI can filter browse by those tags; PDFs are browse/filter-only (not embeddable in memo photo blocks). The older Desktop media-cache watcher is optional/deprecated. Send-to-WhatsApp is **out of scope** (on hold).
 
 ## Quick start (Windows colleagues)
 
@@ -51,7 +51,9 @@ npm run wa-backup
 ```
 
 - `wa-link` — scan QR once (or `npm run wa-link -- --phone 852…`); credentials under `.wa-auth\` (**gitignored**, never commit).
-- `wa-backup` — daemon; incoming photos → `PHOTO_BACKUP_ROOT\<group subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\`).
+- `wa-backup` — daemon; incoming photos **and PDFs** → `PHOTO_BACKUP_ROOT\<group subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\`), with `.tags.json` sidecars + day `tags.json`.
+
+**After every `git pull`:** restart `wa-backup` (Ctrl+C, then `npm run wa-backup`) and restart Draft UI (`npm start`) so new PDF/tag/filter code loads. Auth under `.wa-auth\` is kept — no re-link unless WhatsApp logged the device out. **Tags apply only to newly saved files** (no backfill of older backups).
 
 Full steps, Task Scheduler tips, and safety rules: [docs/whatsapp-baileys-backup.md](docs/whatsapp-baileys-backup.md).
 

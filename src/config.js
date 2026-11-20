@@ -176,7 +176,7 @@ export const config = {
       ".wa-backup-tmp"
     ),
     timezone: process.env.WA_BACKUP_TZ || baileysDefaults.timezone || "Asia/Hong_Kong",
-    mediaTypes: baileysDefaults.mediaTypes || ["image"],
+    mediaTypes: baileysDefaults.mediaTypes || ["image", "pdf"],
     maxConcurrentDownloads: Number(
       process.env.WA_BACKUP_CONCURRENCY ||
         baileysDefaults.maxConcurrentDownloads ||

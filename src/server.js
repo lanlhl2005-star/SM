@@ -108,7 +108,17 @@ app.get("/api/photos", (req, res) => {
   try {
     const group = String(req.query.group || "");
     const day = String(req.query.day || "");
-    res.json({ group, day, photos: listPhotos(group, day) });
+    const filters = {
+      sender: String(req.query.sender || ""),
+      date: String(req.query.date || ""),
+      text: String(req.query.text || req.query.caption || ""),
+    };
+    res.json({
+      group,
+      day,
+      filters,
+      photos: listPhotos(group, day, filters),
+    });
   } catch (err) {
     res.status(400).json(fsErrorPayload(err));
   }
