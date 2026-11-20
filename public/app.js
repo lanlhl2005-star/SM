@@ -466,6 +466,36 @@ function onFilterInput() {
   }, 250);
 }
 
+async function loadAuthChrome() {
+  const banner = $("authBanner");
+  const signOut = $("signOutLink");
+  try {
+    const st = await fetch("/api/auth-status", { cache: "no-store" }).then((r) =>
+      r.json()
+    );
+    if (banner) {
+      if (st.authRequired) {
+        banner.hidden = true;
+        banner.textContent = "";
+      } else {
+        banner.hidden = false;
+        banner.textContent =
+          "Password gate is OFF. Set DRAFT_UI_PASSWORD in .env and restart before sharing a tunnel URL.";
+      }
+    }
+    if (signOut) {
+      signOut.hidden = !st.authRequired;
+      signOut.href = st.logout || "/logout";
+    }
+  } catch {
+    if (banner) {
+      banner.hidden = false;
+      banner.textContent =
+        "Could not read /api/auth-status — restart Draft UI after git pull.";
+    }
+  }
+}
+
 async function loadDefaults() {
   state.defaults = await api("/api/defaults");
   $("date").value = state.defaults.date;
@@ -660,5 +690,6 @@ function initMemoGuide() {
 
 initMemoGuide();
 
+await loadAuthChrome();
 await loadDefaults();
 await loadGroups();
