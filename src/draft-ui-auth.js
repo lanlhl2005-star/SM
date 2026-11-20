@@ -5,18 +5,22 @@ export const LOGIN_PATH = "/login";
 
 /**
  * Password for Draft UI gate. Prefer DRAFT_UI_PASSWORD; UI_PASSWORD is an alias.
- * Empty / unset → no gate (local open access).
+ * Blank/whitespace DRAFT_UI_PASSWORD falls through to UI_PASSWORD (so an empty
+ * placeholder line in .env cannot disable a real UI_PASSWORD value).
+ * Both empty / unset → no gate (local open access).
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */
 export function resolveDraftUiPassword(env = process.env) {
-  const raw =
-    env.DRAFT_UI_PASSWORD !== undefined
-      ? env.DRAFT_UI_PASSWORD
-      : env.UI_PASSWORD !== undefined
-        ? env.UI_PASSWORD
-        : "";
-  return String(raw).trim();
+  const primary = env.DRAFT_UI_PASSWORD;
+  if (primary !== undefined && String(primary).trim() !== "") {
+    return String(primary).trim();
+  }
+  const alias = env.UI_PASSWORD;
+  if (alias !== undefined && String(alias).trim() !== "") {
+    return String(alias).trim();
+  }
+  return "";
 }
 
 /**
@@ -90,12 +94,18 @@ export function requestLooksHttps(req) {
 
 /**
  * @param {string} [errorMessage]
+ * @param {string} [nextPath]
  * @returns {string}
  */
-export function loginPageHtml(errorMessage = "") {
+export function loginPageHtml(errorMessage = "", nextPath = "/") {
   const err = errorMessage
     ? `<p class="err" role="alert">${escapeHtml(errorMessage)}</p>`
     : "";
+  const next = safeNextPath(nextPath);
+  const nextField =
+    next && next !== "/"
+      ? `\n      <input type="hidden" name="next" value="${escapeHtml(next)}" />`
+      : `\n      <input type="hidden" name="next" value="/" />`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,7 +162,7 @@ export function loginPageHtml(errorMessage = "") {
     <h1>Site Memo Draft</h1>
     <p class="sub">Enter the Draft UI password to continue.</p>
     ${err}
-    <form method="post" action="${LOGIN_PATH}" autocomplete="current-password">
+    <form method="post" action="${LOGIN_PATH}" autocomplete="current-password">${nextField}
       <label for="password">Password</label>
       <input id="password" name="password" type="password" required autofocus />
       <button type="submit">Sign in</button>
@@ -210,14 +220,23 @@ export function createDraftUiAuth(opts = {}) {
 
   /** @type {import("express").RequestHandler} */
   function middleware(req, res, next) {
+    // Fail closed: only /login is public when a password is configured.
     const pathOnly = String(req.path || "");
-    if (pathOnly === LOGIN_PATH) return next();
+    if (pathOnly === LOGIN_PATH || pathOnly === `${LOGIN_PATH}/`) return next();
 
     const cookies = parseCookies(req);
     if (tokensMatch(expectedToken, cookies[COOKIE_NAME])) return next();
 
-    if (pathOnly.startsWith("/api/")) {
-      res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-store");
+
+    // APIs and non-document fetches get 401 JSON; navigations/static get login redirect.
+    const accept = String(req.headers.accept || "");
+    const wantsJson =
+      pathOnly.startsWith("/api/") ||
+      accept.includes("application/json") ||
+      String(req.headers["x-requested-with"] || "").toLowerCase() === "xmlhttprequest";
+
+    if (wantsJson || pathOnly.startsWith("/api/")) {
       return res.status(401).json({
         error: "Unauthorized",
         login: LOGIN_PATH,
@@ -225,7 +244,10 @@ export function createDraftUiAuth(opts = {}) {
     }
 
     const nextUrl = `${req.originalUrl || "/"}`;
-    const q = nextUrl && nextUrl !== LOGIN_PATH ? `?next=${encodeURIComponent(nextUrl)}` : "";
+    const q =
+      nextUrl && nextUrl !== LOGIN_PATH && !nextUrl.startsWith(`${LOGIN_PATH}?`)
+        ? `?next=${encodeURIComponent(nextUrl)}`
+        : "";
     return res.redirect(302, `${LOGIN_PATH}${q}`);
   }
 
@@ -240,7 +262,8 @@ export function createDraftUiAuth(opts = {}) {
         return res.redirect(302, next);
       }
       res.setHeader("Cache-Control", "no-store");
-      res.type("html").status(200).send(loginPageHtml());
+      const next = safeNextPath(req.query?.next);
+      res.type("html").status(200).send(loginPageHtml("", next));
     });
 
     app.post(LOGIN_PATH, (req, res) => {
@@ -251,13 +274,15 @@ export function createDraftUiAuth(opts = {}) {
       if (submitted === password) {
         res.setHeader(
           "Set-Cookie",
-          buildAuthSetCookie(expectedToken, { secure: requestLooksHttps(req) })
+          buildAuthSetCookie(expectedToken, {
+            secure: requestLooksHttps(req),
+          })
         );
         return res.redirect(302, next);
       }
 
       res.setHeader("Cache-Control", "no-store");
-      res.type("html").status(401).send(loginPageHtml("Incorrect password."));
+      res.type("html").status(401).send(loginPageHtml("Incorrect password.", next));
     });
   }
 

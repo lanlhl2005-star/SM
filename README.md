@@ -28,7 +28,7 @@ When exposing the UI (especially via Cloudflare quick tunnel), set a password in
 DRAFT_UI_PASSWORD=your-secret-here
 ```
 
-Then **restart** Draft UI (`Ctrl+C`, then `npm start`) so the gate loads. With a password set, every HTML page and `/api/*` route requires sign-in (cookie session after a small login form at `/login`).
+Then **restart** Draft UI (`Ctrl+C`, then `npm start`) so the gate loads. On startup the console prints `auth: ON` or `auth: OFF` — confirm **ON** before sharing a tunnel URL. With a password set, every HTML page, static asset, and `/api/*` route requires sign-in (cookie session after `/login`). Do not leave a blank `DRAFT_UI_PASSWORD=` line above the real value in `.env`.
 
 ### Share Draft UI over the internet (Cloudflare quick tunnel)
 
