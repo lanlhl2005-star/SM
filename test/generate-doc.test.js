@@ -79,6 +79,22 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
       "inline style must not nest double-quotes inside double-quoted attributes"
     );
 
+    // Letterhead in Word header (repeats on every page), not a one-shot body image
+    assert.match(html, /mso-header:\s*h1/);
+    assert.match(html, /mso-element:header/);
+    assert.match(html, /id="h1"/);
+    assert.match(html, /class="MsoHeader"/);
+    assert.match(html, /table id="hrdftrtbl"/);
+    const siteMemoIdx = html.indexOf(">Site Memo<");
+    const headerDivIdx = html.indexOf("mso-element:header");
+    assert.ok(siteMemoIdx > 0 && headerDivIdx > siteMemoIdx);
+    // Body must not place letterhead <img> before the Site Memo title
+    const bodyBeforeTitle = html.slice(0, siteMemoIdx);
+    assert.doesNotMatch(
+      bodyBeforeTitle,
+      /alt="Lap Kei Engineering letterhead"/
+    );
+
     // Borderless routing table: To / Company / Copy to share left edge + colon column
     assert.match(html, /table class="MsoNormalTable routing"/);
     assert.match(html, /table class="MsoNormalTable routing-pair"/);
@@ -179,6 +195,8 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
     assert.match(text, /<u>Project: /);
     assert.doesNotMatch(text, /<b>Project:/);
     assert.match(text, /mso-ascii-font-family:Calibri/);
+    assert.match(text, /mso-element:header/);
+    assert.match(text, /mso-header:\s*h1/);
     const verified = verifyWordHtmlImageEmbeds(text);
     assert.equal(verified.imageCount, 2);
   });
@@ -282,6 +300,22 @@ describe("generate-doc Word HTML site memo (data: URI embeds)", () => {
         ),
       /file:|data:image/
     );
+  });
+
+  it("verifier accepts letterhead when it is not the first img (header after body photos)", () => {
+    const letterhead = extractLetterheadPngFromTemplate(config.templateDoc);
+    const letterheadUri = `data:image/png;base64,${letterhead.toString("base64")}`;
+    const photoPath = mockPhoto("site-memo/2026-11-18/IMG_chiller_plant.jpg");
+    const photoBytes = fs.readFileSync(photoPath);
+    const photoUri = `data:image/jpeg;base64,${photoBytes.toString("base64")}`;
+    const html = `<html>
+<img src="${photoUri}"/>
+<div style='mso-element:header' id="h1"><img src="${letterheadUri}"/></div>
+</html>`;
+    const verified = verifyWordHtmlImageEmbeds(html);
+    assert.equal(verified.imageCount, 2);
+    assert.equal(verified.letterheadBytes, letterhead.length);
+    assert.equal(verified.photoBytes.length, 1);
   });
 
 });
