@@ -15,6 +15,52 @@
     <div class="path-meta" id="pathMeta">Loading paths…</div>
   </header>
 
+  <details class="memo-guide" id="memoGuide" open>
+    <summary>
+      <span class="memo-guide-summary-title">How this maps to the memo</span>
+      <span class="memo-guide-summary-hint">Sample Site Memo — tap a number to highlight the matching field</span>
+    </summary>
+    <div class="memo-guide-body">
+      <div class="memo-guide-stage">
+        <div class="memo-guide-figure" id="memoGuideFigure">
+          <img
+            src="/guide/sm-sample-annotated.jpg"
+            width="909"
+            height="1295"
+            alt="Sample Site Memo showing letterhead, meta fields, project, subject, body, photo blocks, and sign-off"
+          />
+          <!-- Positions are % of the composite sample (header screenshot + photos/sign-off). -->
+          <button type="button" class="guide-marker" style="left:3%;top:5%" data-guide="1" title="Letterhead / header">1</button>
+          <button type="button" class="guide-marker" style="left:3%;top:18%" data-guide="2" title="From">2</button>
+          <button type="button" class="guide-marker" style="left:52%;top:18%" data-guide="3" title="To">3</button>
+          <button type="button" class="guide-marker" style="left:3%;top:24%" data-guide="4" title="Date">4</button>
+          <button type="button" class="guide-marker" style="left:52%;top:24%" data-guide="5" title="Company">5</button>
+          <button type="button" class="guide-marker" style="left:3%;top:30%" data-guide="6" title="Our Ref.">6</button>
+          <button type="button" class="guide-marker" style="left:52%;top:30%" data-guide="7" title="Copy to">7</button>
+          <button type="button" class="guide-marker" style="left:3%;top:37%" data-guide="8" title="Project">8</button>
+          <button type="button" class="guide-marker" style="left:3%;top:44%" data-guide="9" title="Subject">9</button>
+          <button type="button" class="guide-marker" style="left:3%;top:50%" data-guide="10" title="Body intro &amp; bullets">10</button>
+          <button type="button" class="guide-marker" style="left:3%;top:68%" data-guide="11" title="Photo block + caption">11</button>
+          <button type="button" class="guide-marker" style="left:3%;top:90%" data-guide="12" title="Sign-off">12</button>
+        </div>
+        <ol class="memo-guide-legend">
+          <li data-guide="1"><b>1 · Letterhead</b> — company logo/header in the Word template (repeats every page; not edited here)</li>
+          <li data-guide="2"><b>2 · From</b> — project-locked sender</li>
+          <li data-guide="3"><b>3 · To</b> — project-locked receiver</li>
+          <li data-guide="4"><b>4 · Date</b> — editable date field</li>
+          <li data-guide="5"><b>5 · Company</b> — project-locked company</li>
+          <li data-guide="6"><b>6 · Our Ref.</b> — next memo number (SM-xxx)</li>
+          <li data-guide="7"><b>7 · Copy to</b> — optional; usually empty</li>
+          <li data-guide="8"><b>8 · Project</b> — project-locked title</li>
+          <li data-guide="9"><b>9 · Subject</b> — editable subject</li>
+          <li data-guide="10"><b>10 · Body</b> — intro paragraph + bullets</li>
+          <li data-guide="11"><b>11 · Photos</b> — bordered photo block(s) + caption</li>
+          <li data-guide="12"><b>12 · Sign-off</b> — project-locked signatory</li>
+        </ol>
+      </div>
+    </div>
+  </details>
+
   <main class="layout">
     <section class="panel" aria-labelledby="browse-heading">
       <h2 id="browse-heading">1. Browse photos</h2>
@@ -36,43 +82,47 @@
       <p class="hint">Select one or more photos, then <b>Add as one block</b> (shared border + one caption) or <b>Add each separately</b>. Order in section 2 = order in the memo.</p>
     </section>
 
-    <section class="panel" aria-labelledby="blocks-heading">
-      <h2 id="blocks-heading">2. Photo blocks</h2>
+    <section class="panel" aria-labelledby="blocks-heading" data-guide-field="11">
+      <h2 id="blocks-heading"><span class="guide-num" data-guide="11" aria-hidden="true">11</span> 2. Photo blocks</h2>
       <div id="blocks" class="blocks"></div>
       <p id="blocksEmpty" class="hint">No photo blocks yet — select photos above, then add as one block or separately.</p>
     </section>
 
     <section class="panel" aria-labelledby="fields-heading">
       <h2 id="fields-heading">3. Memo fields</h2>
+      <p class="guide-static-note" data-guide-field="1">
+        <span class="guide-num" data-guide="1" aria-hidden="true">1</span>
+        Letterhead comes from the Word template header (not a form field).
+      </p>
       <div class="locked" id="lockedFields"></div>
       <div class="grid-2">
-        <label class="field">
-          <span>Date (DD/MM/YYYY)</span>
+        <label class="field" data-guide-field="4">
+          <span><span class="guide-num" data-guide="4" aria-hidden="true">4</span> Date (DD/MM/YYYY)</span>
           <input id="date" type="text" autocomplete="off" />
         </label>
-        <label class="field">
-          <span>Next number</span>
+        <label class="field" data-guide-field="6">
+          <span><span class="guide-num" data-guide="6" aria-hidden="true">6</span> Next number</span>
           <input id="memoNumber" type="text" readonly />
         </label>
       </div>
-      <label class="field">
-        <span>Subject</span>
+      <label class="field" data-guide-field="9">
+        <span><span class="guide-num" data-guide="9" aria-hidden="true">9</span> Subject</span>
         <input id="subject" type="text" placeholder="e.g. Notice of chilled water pipe delivery" />
       </label>
       <label class="field">
         <span>Short folder title (optional)</span>
         <input id="shortSubject" type="text" placeholder="Defaults from subject; used in SM-nn folder name" />
       </label>
-      <label class="field">
-        <span>Copy to (optional, usually empty)</span>
+      <label class="field" data-guide-field="7">
+        <span><span class="guide-num" data-guide="7" aria-hidden="true">7</span> Copy to (optional, usually empty)</span>
         <input id="copyTo" type="text" />
       </label>
-      <label class="field">
-        <span>Body intro</span>
+      <label class="field" data-guide-field="10">
+        <span><span class="guide-num" data-guide="10" aria-hidden="true">10</span> Body intro</span>
         <textarea id="bodyIntro" rows="3" placeholder="Opening paragraph…"></textarea>
       </label>
-      <label class="field">
-        <span>Body bullets (one per line)</span>
+      <label class="field" data-guide-field="10">
+        <span><span class="guide-num" data-guide="10" aria-hidden="true">10</span> Body bullets (one per line)</span>
         <textarea id="bodyBullets" rows="4" placeholder="Bullet one&#10;Bullet two"></textarea>
       </label>
       <p class="folder-preview" id="folderPreview"></p>

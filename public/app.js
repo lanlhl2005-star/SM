@@ -60,10 +60,20 @@ function renderPathMeta() {
 function renderLocked() {
   const L = state.defaults.projectLocked;
   $("lockedFields").innerHTML =
-    `<div><b>From</b> ${escape(L.from_name)} &nbsp;|&nbsp; <b>To</b> ${escape(L.to_names)}</div>` +
-    `<div><b>Company</b> ${escape(L.company)}</div>` +
-    `<div><b>Our Ref.</b> ${escape(L.our_ref_prefix)}{nnn} &nbsp;|&nbsp; <b>Signatory</b> ${escape(L.signatory_name)}</div>` +
+    `<div class="guide-locked-row">` +
+    `<span class="guide-locked-item" data-guide-field="2"><span class="guide-num" data-guide="2" aria-hidden="true">2</span><b>From</b> ${escape(L.from_name)}</span>` +
+    `<span class="guide-locked-item" data-guide-field="3"><span class="guide-num" data-guide="3" aria-hidden="true">3</span><b>To</b> ${escape(L.to_names)}</span>` +
+    `</div>` +
+    `<div class="guide-locked-row">` +
+    `<span class="guide-locked-item" data-guide-field="5"><span class="guide-num" data-guide="5" aria-hidden="true">5</span><b>Company</b> ${escape(L.company)}</span>` +
+    `<span class="guide-locked-item" data-guide-field="8"><span class="guide-num" data-guide="8" aria-hidden="true">8</span><b>Project</b> (locked)</span>` +
+    `</div>` +
+    `<div class="guide-locked-row">` +
+    `<span class="guide-locked-item" data-guide-field="6"><span class="guide-num" data-guide="6" aria-hidden="true">6</span><b>Our Ref.</b> ${escape(L.our_ref_prefix)}{nnn}</span>` +
+    `<span class="guide-locked-item" data-guide-field="12"><span class="guide-num" data-guide="12" aria-hidden="true">12</span><b>Signatory</b> ${escape(L.signatory_name)}</span>` +
+    `</div>` +
     `<div>Project-locked for LK-P01043 — not editable in this UI</div>`;
+  bindGuideFieldHovers($("lockedFields"));
 }
 
 function escape(s) {
@@ -449,6 +459,104 @@ $("submitBtn").addEventListener("click", submit);
 $("addOneBlockBtn").addEventListener("click", addAsOneBlock);
 $("addEachBtn").addEventListener("click", addEachSeparately);
 $("clearSelectBtn").addEventListener("click", clearSelection);
+
+/** @type {string | null} */
+let activeGuide = null;
+
+function clearGuideHighlight() {
+  document
+    .querySelectorAll(".guide-active")
+    .forEach((el) => el.classList.remove("guide-active"));
+  activeGuide = null;
+}
+
+/**
+ * Highlight sample markers + matching form controls for a guide number.
+ * @param {string | number | null} n
+ * @param {{ scrollField?: boolean, scrollMarker?: boolean }} [opts]
+ */
+function setGuideActive(n, opts = {}) {
+  const id = n == null || n === "" ? null : String(n);
+  clearGuideHighlight();
+  if (!id) return;
+  activeGuide = id;
+  document.querySelectorAll(`[data-guide="${id}"]`).forEach((el) => {
+    el.classList.add("guide-active");
+  });
+  document.querySelectorAll(`[data-guide-field~="${id}"]`).forEach((el) => {
+    el.classList.add("guide-active");
+  });
+  if (opts.scrollField !== false) {
+    const field = document.querySelector(`[data-guide-field~="${id}"]`);
+    if (field) field.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  if (opts.scrollMarker) {
+    const marker = document.querySelector(
+      `.memo-guide-figure .guide-marker[data-guide="${id}"]`
+    );
+    if (marker) {
+      marker.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const guide = $("memoGuide");
+      if (guide && !guide.open) guide.open = true;
+    }
+  }
+}
+
+/**
+ * @param {ParentNode | null} root
+ */
+function bindGuideFieldHovers(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-guide-field]").forEach((el) => {
+    if (el.dataset.guideBound === "1") return;
+    el.dataset.guideBound = "1";
+    el.addEventListener("mouseenter", () => {
+      const n = el.getAttribute("data-guide-field")?.trim().split(/\s+/)[0];
+      if (n) setGuideActive(n, { scrollField: false, scrollMarker: true });
+    });
+    el.addEventListener("focusin", () => {
+      const n = el.getAttribute("data-guide-field")?.trim().split(/\s+/)[0];
+      if (n) setGuideActive(n, { scrollField: false, scrollMarker: true });
+    });
+    el.addEventListener("click", () => {
+      const n = el.getAttribute("data-guide-field")?.trim().split(/\s+/)[0];
+      if (n) setGuideActive(n, { scrollField: false, scrollMarker: true });
+    });
+  });
+}
+
+function initMemoGuide() {
+  const figure = $("memoGuideFigure");
+  if (!figure) return;
+
+  figure.querySelectorAll(".guide-marker").forEach((btn) => {
+    const activate = () =>
+      setGuideActive(btn.getAttribute("data-guide"), {
+        scrollField: true,
+        scrollMarker: false,
+      });
+    btn.addEventListener("mouseenter", activate);
+    btn.addEventListener("focus", activate);
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      activate();
+    });
+  });
+
+  document.querySelectorAll(".memo-guide-legend [data-guide]").forEach((li) => {
+    const activate = () =>
+      setGuideActive(li.getAttribute("data-guide"), {
+        scrollField: true,
+        scrollMarker: true,
+      });
+    li.addEventListener("mouseenter", activate);
+    li.addEventListener("click", activate);
+  });
+
+  bindGuideFieldHovers(document);
+}
+
+initMemoGuide();
 
 await loadDefaults();
 await loadGroups();
