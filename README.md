@@ -16,6 +16,18 @@ npm start
 
 Open **http://127.0.0.1:3847** in a browser.
 
+Default Draft UI port is **3847** (`config/default.json`); override with `PORT` in `.env` if needed. The `tunnel` script below targets `127.0.0.1:3847` — if you change `PORT`, point cloudflared at the same port.
+
+### Share Draft UI over the internet (Cloudflare quick tunnel)
+
+Start the Draft UI first (`npm start`), then in another terminal:
+
+```bat
+npm run tunnel
+```
+
+Copy the printed `https://….trycloudflare.com` URL from the cloudflared output. Treat that URL as a **secret** (anyone with it can reach your local Draft UI). Press **Ctrl+C** to stop the tunnel. No Cloudflare account is required for quick tunnels (`npx` downloads `cloudflared` on demand).
+
 ### Photo backup — Baileys linked device (primary)
 
 Run on an always-on **Windows PC** (not in the cloud). Needs a spare **Linked devices** slot; phone stays primary.

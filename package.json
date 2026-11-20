@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node scripts/run-with-unc.mjs src/server.js",
     "dev": "node scripts/run-with-unc.mjs --watch src/server.js",
+    "tunnel": "npx --yes cloudflared tunnel --url http://127.0.0.1:3847",
     "draft": "node scripts/run-with-unc.mjs src/cli-draft.js",
     "wa-link": "node scripts/run-with-unc.mjs src/wa-backup/index.js link",
     "wa-backup": "node scripts/run-with-unc.mjs src/wa-backup/index.js run",
