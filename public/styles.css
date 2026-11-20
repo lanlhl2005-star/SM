@@ -308,3 +308,192 @@ h2 {
 }
 
 .result.error { background: #3a1515; color: #ffd7d7; }
+
+/* —— Memo field → Word section guide —— */
+.memo-guide {
+  margin: 0 1.25rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(247, 250, 252, 0.95);
+  box-shadow: var(--shadow);
+}
+
+.memo-guide > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  padding: 0.7rem 1rem;
+  user-select: none;
+}
+
+.memo-guide > summary::-webkit-details-marker { display: none; }
+
+.memo-guide > summary::before {
+  content: "▸";
+  color: var(--accent);
+  font-size: 0.85rem;
+  margin-right: 0.15rem;
+}
+
+.memo-guide[open] > summary::before { content: "▾"; }
+
+.memo-guide-summary-title {
+  font-weight: 650;
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.memo-guide-summary-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.memo-guide-body {
+  padding: 0 0.85rem 0.95rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-guide-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(14rem, 0.85fr);
+  gap: 0.85rem;
+  padding-top: 0.75rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .memo-guide { margin: 0 0.75rem 0.25rem; }
+  .memo-guide-stage { grid-template-columns: 1fr; }
+}
+
+.memo-guide-figure {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: auto;
+  max-height: min(62vh, 36rem);
+}
+
+.memo-guide-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: top;
+}
+
+.guide-marker {
+  position: absolute;
+  z-index: 2;
+  width: 1.55rem;
+  height: 1.55rem;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--accent-2);
+  color: #fff;
+  font: 700 0.72rem/1 "Segoe UI", sans-serif;
+  box-shadow: 0 1px 4px rgba(26, 36, 48, 0.35);
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.guide-marker:hover,
+.guide-marker:focus-visible,
+.guide-marker.guide-active {
+  background: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  z-index: 3;
+}
+
+.memo-guide-legend {
+  margin: 0;
+  padding: 0 0 0 0.15rem;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.35;
+  max-height: min(62vh, 36rem);
+  overflow: auto;
+}
+
+.memo-guide-legend li {
+  border-radius: 6px;
+  padding: 0.35rem 0.45rem;
+  margin-bottom: 0.2rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.memo-guide-legend li:hover,
+.memo-guide-legend li.guide-active {
+  background: #eef5fb;
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.memo-guide-legend b { color: var(--ink); font-weight: 650; }
+
+.guide-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  margin-right: 0.3rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.guide-static-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0 0.65rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+  background: #f3f7fa;
+}
+
+.locked .guide-locked-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  align-items: baseline;
+}
+
+.locked .guide-locked-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+[data-guide-field].guide-active,
+.guide-static-note.guide-active,
+.locked.guide-active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+  background: #eef5fb;
+}
+
+.field.guide-active input,
+.field.guide-active textarea,
+.field.guide-active select {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(31, 79, 122, 0.18);
+}
