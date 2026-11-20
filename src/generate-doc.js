@@ -339,19 +339,35 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <![endif]-->
 <style>
   /* Mirror site-memo-template.doc / SM-005: Calibri 12pt body, PMingLiU for ZH */
+  /* Letterhead is a Word header (mso-header:h1) so it repeats on every page. */
   @page Section1 {
     size: 595.3pt 841.9pt;
-    margin: 42.55pt 51.05pt 42.55pt 51.05pt;
+    /* Top margin clears ~101pt letterhead under mso-header-margin 36pt */
+    margin: 148.0pt 51.05pt 42.55pt 51.05pt;
     mso-header-margin: 36.0pt;
     mso-footer-margin: 36.0pt;
+    mso-header: h1;
   }
   div.Section1 { page: Section1; }
+  /* Off-canvas header/footer definition table (Word HTML idiom) */
+  table#hrdftrtbl {
+    margin: 0in 0in 0in 900in;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
   body {
     ${FONT_CSS};
     font-size: ${FONT_SIZE};
     color: windowtext;
   }
   p.MsoNormal, li.MsoNormal, div.MsoNormal {
+    margin: 0;
+    ${FONT_CSS};
+    font-size: ${FONT_SIZE};
+    mso-fareast-language: ZH-TW;
+  }
+  p.MsoHeader, li.MsoHeader, div.MsoHeader {
     margin: 0;
     ${FONT_CSS};
     font-size: ${FONT_SIZE};
@@ -364,12 +380,7 @@ xmlns="http://www.w3.org/TR/REC-html40">
 <body lang="EN-US" style='tab-interval:36.0pt'>
 <div class="Section1">
 
-<p class="MsoNormal" align="center" style='text-align:center;margin:0;'>
-  <img width="640" src="${letterheadSrc}" alt="Lap Kei Engineering letterhead"
-    style='width:640px;max-width:100%;height:auto;'/>
-</p>
-
-<p class="MsoNormal" align="center" style='${FONT_CSS};font-size:14.0pt;font-weight:bold;text-align:center;margin:8.0pt 0 10.0pt 0;'>Site Memo</p>
+<p class="MsoNormal" align="center" style='${FONT_CSS};font-size:14.0pt;font-weight:bold;text-align:center;margin:0 0 10.0pt 0;'>Site Memo</p>
 
 ${routingHtml(payload, locked, copyTo)}
 
@@ -392,6 +403,19 @@ ${p("margin:0;", escapeHtml(locked.closing_company))}
 ${p("margin:0;", escapeHtml(locked.signatory_name))}
 ${p("margin:0;", escapeHtml(locked.signatory_title))}
 ${p("margin:6.0pt 0 0 0;font-size:10.0pt;", escapeHtml(locked.ref_initials))}
+
+<table id="hrdftrtbl" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td>
+      <div style='mso-element:header' id="h1">
+        <p class="MsoHeader" align="center" style='text-align:center;margin:0;'>
+          <img width="640" src="${letterheadSrc}" alt="Lap Kei Engineering letterhead"
+            style='width:640px;max-width:100%;height:auto;'/>
+        </p>
+      </div>
+    </td>
+  </tr>
+</table>
 
 </div>
 </body>
@@ -490,14 +514,13 @@ export function verifyWordHtmlImageEmbeds(htmlOrDoc) {
     decoded.push({ mime, bytes, byteLength: bytes.length });
   }
 
-  // First image should be template letterhead PNG.
-  if (decoded.length > 0) {
-    const letterheadExpected = extractLetterheadPngFromTemplate(config.templateDoc);
-    if (!decoded[0].bytes.equals(letterheadExpected)) {
-      problems.push(
-        "first img is not the PNG letterhead extracted from site-memo-template.doc"
-      );
-    }
+  // Letterhead lives in the Word header (may not be the first <img> in source order).
+  const letterheadExpected = extractLetterheadPngFromTemplate(config.templateDoc);
+  const letterheadIdx = decoded.findIndex((d) => d.bytes.equals(letterheadExpected));
+  if (decoded.length > 0 && letterheadIdx < 0) {
+    problems.push(
+      "no img matches the PNG letterhead extracted from site-memo-template.doc"
+    );
   }
 
   if (problems.length) {
@@ -506,10 +529,15 @@ export function verifyWordHtmlImageEmbeds(htmlOrDoc) {
     );
   }
 
+  const photoBytes = decoded
+    .filter((_, i) => i !== letterheadIdx)
+    .map((d) => d.byteLength);
+
   return {
     imageCount: decoded.length,
-    letterheadBytes: decoded[0]?.byteLength ?? 0,
-    photoBytes: decoded.slice(1).map((d) => d.byteLength),
+    letterheadBytes:
+      letterheadIdx >= 0 ? decoded[letterheadIdx].byteLength : 0,
+    photoBytes,
   };
 }
 
