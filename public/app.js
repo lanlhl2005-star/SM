@@ -1,3 +1,13 @@
+import {
+  DRAG_MIME,
+  applyDropOnBlock as applyDropOnBlockPure,
+  applyDropOnBlocksTray as applyDropOnBlocksTrayPure,
+  defaultCaptionFor,
+  parseDrag,
+  serializeDrag,
+  usedPaths as usedPathsIn,
+} from "./photo-blocks.mjs";
+
 const state = {
   groups: [],
   group: "",
@@ -36,11 +46,7 @@ function photoUrl(rel) {
 }
 
 function usedPaths() {
-  const used = new Set();
-  for (const b of state.blocks) {
-    for (const img of b.images) used.add(img.relativePath);
-  }
-  return used;
+  return usedPathsIn(state.blocks);
 }
 
 function renderPathMeta() {
@@ -123,13 +129,6 @@ function renderDays() {
   sel.value = state.day;
 }
 
-function defaultCaptionFor(photos) {
-  if (photos.length === 1) {
-    return `Photo of ${photos[0].name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ")}`;
-  }
-  return `Photos (${photos.length})`;
-}
-
 function tagSummary(p) {
   const t = p.tags;
   if (!t) return "";
@@ -156,104 +155,55 @@ function endDrag() {
   clearDropHighlights();
 }
 
-function photoFromPath(relativePath) {
-  return state.photos.find((p) => p.relativePath === relativePath) || null;
+/** Resolve drag payload from memory or dataTransfer (drop may race dragend). */
+function dragFromEvent(e) {
+  if (activeDrag) return activeDrag;
+  const raw =
+    e?.dataTransfer?.getData(DRAG_MIME) ||
+    e?.dataTransfer?.getData("text/plain") ||
+    "";
+  // text/plain may be a path only — prefer JSON MIME.
+  const parsed = parseDrag(
+    e?.dataTransfer?.getData(DRAG_MIME) || (raw.startsWith("{") ? raw : "")
+  );
+  return parsed;
 }
 
-function findImageLocation(relativePath) {
-  for (let bi = 0; bi < state.blocks.length; bi++) {
-    const ii = state.blocks[bi].images.findIndex(
-      (img) => img.relativePath === relativePath
-    );
-    if (ii >= 0) return { blockIndex: bi, imageIndex: ii };
+function writeDragPayload(e, drag) {
+  const json = serializeDrag(drag);
+  try {
+    e.dataTransfer.setData(DRAG_MIME, json);
+  } catch {
+    /* some browsers only allow text/plain in certain modes */
   }
-  return null;
+  e.dataTransfer.setData("text/plain", json);
 }
 
-/**
- * Move or insert an image into a target block at imageIndex (append if null/undefined).
- * @returns {boolean}
- */
-function placeImageInBlock(img, toBlockIndex, toImageIndex) {
-  if (!img?.relativePath || toBlockIndex < 0 || toBlockIndex >= state.blocks.length) {
-    return false;
+function afterBlockMutation(ok, drag) {
+  if (!ok) return;
+  if (drag?.kind === "gallery" && drag.relativePath) {
+    state.selected.delete(drag.relativePath);
   }
-  const existing = findImageLocation(img.relativePath);
-  let targetBlock = toBlockIndex;
-  let targetIndex =
-    toImageIndex == null || toImageIndex < 0
-      ? state.blocks[targetBlock].images.length
-      : toImageIndex;
-
-  if (existing) {
-    const { blockIndex: fromB, imageIndex: fromI } = existing;
-    if (fromB === targetBlock && (fromI === targetIndex || fromI === targetIndex - 1)) {
-      return false;
-    }
-    const [moved] = state.blocks[fromB].images.splice(fromI, 1);
-    if (fromB === targetBlock && fromI < targetIndex) targetIndex -= 1;
-    if (!state.blocks[fromB].images.length) {
-      state.blocks.splice(fromB, 1);
-      if (fromB < targetBlock) targetBlock -= 1;
-      if (targetBlock < 0 || targetBlock >= state.blocks.length) {
-        // Source block removed and target vanished — recreate as new block.
-        state.blocks.push({
-          images: [moved],
-          caption: defaultCaptionFor([moved]),
-        });
-        return true;
-      }
-    }
-    const block = state.blocks[targetBlock];
-    const clamped = Math.max(0, Math.min(targetIndex, block.images.length));
-    block.images.splice(clamped, 0, moved);
-    return true;
-  }
-
-  if (usedPaths().has(img.relativePath)) return false;
-  const block = state.blocks[targetBlock];
-  const clamped = Math.max(0, Math.min(targetIndex, block.images.length));
-  block.images.splice(clamped, 0, {
-    relativePath: img.relativePath,
-    name: img.name,
-  });
-  state.selected.delete(img.relativePath);
-  return true;
+  renderPhotos();
+  renderBlocks();
 }
 
-function createBlockFromGallery(relativePath, name, atIndex) {
-  if (usedPaths().has(relativePath)) return false;
-  const photo = photoFromPath(relativePath);
-  const img = {
-    relativePath,
-    name: name || photo?.name || relativePath.split("/").pop(),
-  };
-  const block = {
-    images: [img],
-    caption: defaultCaptionFor([img]),
-  };
-  if (atIndex == null || atIndex < 0 || atIndex > state.blocks.length) {
-    state.blocks.push(block);
-  } else {
-    state.blocks.splice(atIndex, 0, block);
+function applyDropOnBlock(blockIndex, beforeImageIndex, drag) {
+  const d = drag || activeDrag;
+  const ok = applyDropOnBlockPure(state.blocks, d, blockIndex, beforeImageIndex);
+  if (ok && d?.kind === "gallery" && d.relativePath) {
+    state.selected.delete(d.relativePath);
   }
-  state.selected.delete(relativePath);
-  return true;
+  return ok;
 }
 
-function moveBlockTo(fromIndex, toIndex) {
-  if (
-    fromIndex === toIndex ||
-    fromIndex < 0 ||
-    toIndex < 0 ||
-    fromIndex >= state.blocks.length ||
-    toIndex >= state.blocks.length
-  ) {
-    return false;
+function applyDropOnBlocksTray(drag) {
+  const d = drag || activeDrag;
+  const ok = applyDropOnBlocksTrayPure(state.blocks, d);
+  if (ok && d?.kind === "gallery" && d.relativePath) {
+    state.selected.delete(d.relativePath);
   }
-  const [block] = state.blocks.splice(fromIndex, 1);
-  state.blocks.splice(toIndex, 0, block);
-  return true;
+  return ok;
 }
 
 function moveImageWithinBlock(blockIndex, fromIndex, delta) {
@@ -267,63 +217,14 @@ function moveImageWithinBlock(blockIndex, fromIndex, delta) {
   renderBlocks();
 }
 
-function applyDropOnBlock(blockIndex, beforeImageIndex) {
-  if (!activeDrag) return false;
-  if (activeDrag.kind === "gallery") {
-    return placeImageInBlock(
-      { relativePath: activeDrag.relativePath, name: activeDrag.name },
-      blockIndex,
-      beforeImageIndex
-    );
-  }
-  if (activeDrag.kind === "thumb") {
-    return placeImageInBlock(
-      { relativePath: activeDrag.relativePath, name: activeDrag.name },
-      blockIndex,
-      beforeImageIndex
-    );
-  }
-  if (activeDrag.kind === "block") {
-    return moveBlockTo(activeDrag.blockIndex, blockIndex);
-  }
-  return false;
-}
-
-function applyDropOnBlocksTray() {
-  if (!activeDrag) return false;
-  if (activeDrag.kind === "gallery") {
-    return createBlockFromGallery(activeDrag.relativePath, activeDrag.name);
-  }
-  if (activeDrag.kind === "thumb") {
-    const loc = findImageLocation(activeDrag.relativePath);
-    if (!loc) return false;
-    const [img] = state.blocks[loc.blockIndex].images.splice(loc.imageIndex, 1);
-    if (!state.blocks[loc.blockIndex].images.length) {
-      state.blocks.splice(loc.blockIndex, 1);
-    }
-    state.blocks.push({
-      images: [img],
-      caption: defaultCaptionFor([img]),
-    });
-    return true;
-  }
-  if (activeDrag.kind === "block") {
-    return moveBlockTo(activeDrag.blockIndex, state.blocks.length - 1);
-  }
-  return false;
-}
-
 function bindBlockDropTarget(el, blockIndex) {
   el.addEventListener("dragover", (e) => {
-    if (!activeDrag) return;
-    if (
-      activeDrag.kind === "gallery" ||
-      activeDrag.kind === "thumb" ||
-      activeDrag.kind === "block"
-    ) {
+    const drag = dragFromEvent(e) || activeDrag;
+    if (!drag) return;
+    if (drag.kind === "gallery" || drag.kind === "thumb" || drag.kind === "block") {
       e.preventDefault();
-      e.dataTransfer.dropEffect =
-        activeDrag.kind === "gallery" ? "copy" : "move";
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = drag.kind === "gallery" ? "copy" : "move";
       el.classList.add("drop-target");
     }
   });
@@ -333,12 +234,35 @@ function bindBlockDropTarget(el, blockIndex) {
   el.addEventListener("drop", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const ok = applyDropOnBlock(blockIndex, null);
+    const drag = dragFromEvent(e);
+    const ok = applyDropOnBlock(blockIndex, null, drag);
     endDrag();
-    if (ok) {
-      renderPhotos();
-      renderBlocks();
+    afterBlockMutation(ok, drag);
+  });
+}
+
+function bindTrayDropTarget(root) {
+  if (root.dataset.dndBound === "1") return;
+  root.dataset.dndBound = "1";
+  root.addEventListener("dragover", (e) => {
+    const drag = dragFromEvent(e) || activeDrag;
+    if (!drag) return;
+    if (drag.kind === "gallery" || drag.kind === "thumb" || drag.kind === "block") {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = drag.kind === "gallery" ? "copy" : "move";
+      root.classList.add("drop-target");
     }
+  });
+  root.addEventListener("dragleave", (e) => {
+    if (!root.contains(e.relatedTarget)) root.classList.remove("drop-target");
+  });
+  root.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const drag = dragFromEvent(e);
+    const ok = applyDropOnBlocksTray(drag);
+    endDrag();
+    afterBlockMutation(ok, drag);
   });
 }
 
@@ -394,7 +318,7 @@ function renderPhotos() {
         suppressNextPhotoClick = true;
         btn.classList.add("dragging");
         e.dataTransfer.effectAllowed = "copyMove";
-        e.dataTransfer.setData("text/plain", p.relativePath);
+        writeDragPayload(e, activeDrag);
       });
       btn.addEventListener("dragend", () => {
         endDrag();
@@ -538,8 +462,14 @@ function addSelectedToBlock(blockIndex) {
 
 function renderBlocks() {
   const root = $("blocks");
-  root.innerHTML = "";
-  $("blocksEmpty").hidden = state.blocks.length > 0;
+  const emptyEl = $("blocksEmpty");
+  // Keep empty-state node; rebuild only block cards.
+  root.querySelectorAll(".block").forEach((el) => el.remove());
+  if (emptyEl) {
+    emptyEl.hidden = state.blocks.length > 0;
+    // Ensure empty hint stays inside the scroll/drop tray.
+    if (emptyEl.parentElement !== root) root.appendChild(emptyEl);
+  }
   const hasPending = state.selected.size > 0;
   state.blocks.forEach((b, i) => {
     const el = document.createElement("div");
@@ -554,26 +484,30 @@ function renderBlocks() {
               <button type="button" class="btn btn-ghost btn-icon" data-img-right="${i}:${j}" title="Move right" ${j === b.images.length - 1 ? "disabled" : ""}>→</button>
             </div>`
           : "";
-        return `<div class="thumb" draggable="true" data-thumb="${i}:${j}" title="Drag to reorder">
-            <img src="${photoUrl(img.relativePath)}" alt="" draggable="false"/>
-            <button type="button" class="thumb-rm" data-rm-img="${i}:${j}" title="Remove photo">×</button>
+        return `<div class="thumb" draggable="true" data-thumb="${i}:${j}" title="Drag to move or reorder">
+            <div class="thumb-preview">
+              <img src="${photoUrl(img.relativePath)}" alt="" draggable="false"/>
+              <button type="button" class="thumb-rm" data-rm-img="${i}:${j}" title="Remove photo">×</button>
+            </div>
+            <div class="thumb-name" title="${escape(img.name)}">${escape(img.name)}</div>
             ${reorderBtns}
           </div>`;
       })
       .join("");
-    const names = b.images.map((img) => img.name).join(", ");
     el.innerHTML = `
       <div class="block-handle" draggable="true" title="Drag to reorder blocks" aria-label="Reorder block">⋮⋮</div>
-      <div class="thumbs">${thumbs}</div>
-      <div>
-        <div class="meta">#${i + 1} · ${b.images.length} photo${b.images.length === 1 ? "" : "s"} · ${escape(names)}</div>
+      <div class="block-main">
+        <div class="block-head">
+          <div class="meta">#${i + 1} · ${b.images.length} photo${b.images.length === 1 ? "" : "s"}</div>
+          <div class="block-actions">
+            <button type="button" class="btn btn-ghost btn-icon" data-up="${i}" title="Move block up">↑</button>
+            <button type="button" class="btn btn-ghost btn-icon" data-down="${i}" title="Move block down">↓</button>
+            <button type="button" class="btn btn-secondary" data-add-sel="${i}" ${hasPending ? "" : "disabled"} title="Add currently selected photos to this block">+ selected</button>
+            <button type="button" class="btn btn-danger" data-rm="${i}">Remove</button>
+          </div>
+        </div>
+        <div class="thumbs">${thumbs}</div>
         <textarea data-i="${i}" placeholder="Caption for this bordered group"></textarea>
-      </div>
-      <div class="block-actions">
-        <button type="button" class="btn btn-ghost btn-icon" data-up="${i}" title="Move block up">↑</button>
-        <button type="button" class="btn btn-ghost btn-icon" data-down="${i}" title="Move block down">↓</button>
-        <button type="button" class="btn btn-secondary" data-add-sel="${i}" ${hasPending ? "" : "disabled"} title="Add currently selected photos to this block">+ selected</button>
-        <button type="button" class="btn btn-danger" data-rm="${i}">Remove</button>
       </div>`;
     const ta = el.querySelector("textarea");
     ta.value = b.caption;
@@ -613,20 +547,18 @@ function renderBlocks() {
       activeDrag = { kind: "block", blockIndex: i };
       el.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", `block:${i}`);
+      writeDragPayload(e, activeDrag);
       e.stopPropagation();
     });
     handle.addEventListener("dragend", () => endDrag());
 
     const thumbsEl = el.querySelector(".thumbs");
     thumbsEl.addEventListener("dragover", (e) => {
-      if (!activeDrag || (activeDrag.kind !== "gallery" && activeDrag.kind !== "thumb")) {
-        return;
-      }
+      const drag = dragFromEvent(e) || activeDrag;
+      if (!drag || (drag.kind !== "gallery" && drag.kind !== "thumb")) return;
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect =
-        activeDrag.kind === "gallery" ? "copy" : "move";
+      e.dataTransfer.dropEffect = drag.kind === "gallery" ? "copy" : "move";
       thumbsEl.classList.add("drop-target");
     });
     thumbsEl.addEventListener("dragleave", (e) => {
@@ -637,12 +569,10 @@ function renderBlocks() {
     thumbsEl.addEventListener("drop", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const ok = applyDropOnBlock(i, state.blocks[i].images.length);
+      const drag = dragFromEvent(e);
+      const ok = applyDropOnBlock(i, state.blocks[i]?.images.length ?? 0, drag);
       endDrag();
-      if (ok) {
-        renderPhotos();
-        renderBlocks();
-      }
+      afterBlockMutation(ok, drag);
     });
 
     el.querySelectorAll(".thumb[data-thumb]").forEach((thumb) => {
@@ -659,63 +589,39 @@ function renderBlocks() {
         };
         thumb.classList.add("dragging");
         e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", img.relativePath);
+        writeDragPayload(e, activeDrag);
         e.stopPropagation();
       });
       thumb.addEventListener("dragend", () => endDrag());
       thumb.addEventListener("dragover", (e) => {
-        if (!activeDrag || (activeDrag.kind !== "thumb" && activeDrag.kind !== "gallery")) {
-          return;
-        }
+        const drag = dragFromEvent(e) || activeDrag;
+        if (!drag || (drag.kind !== "thumb" && drag.kind !== "gallery")) return;
         e.preventDefault();
         e.stopPropagation();
+        e.dataTransfer.dropEffect = drag.kind === "gallery" ? "copy" : "move";
         thumb.classList.add("drop-target");
       });
       thumb.addEventListener("dragleave", () => thumb.classList.remove("drop-target"));
       thumb.addEventListener("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const ok = applyDropOnBlock(bi, ii);
+        const drag = dragFromEvent(e);
+        const ok = applyDropOnBlock(bi, ii, drag);
         endDrag();
-        if (ok) {
-          renderPhotos();
-          renderBlocks();
-        }
+        afterBlockMutation(ok, drag);
       });
     });
 
     bindBlockDropTarget(el, i);
-    root.appendChild(el);
+    // Insert before empty hint so empty stays at the bottom of the tray.
+    if (emptyEl && emptyEl.parentElement === root) {
+      root.insertBefore(el, emptyEl);
+    } else {
+      root.appendChild(el);
+    }
   });
 
-  // Tray accepts gallery → new block (and empty-state drop).
-  if (!root.dataset.dndBound) {
-    root.dataset.dndBound = "1";
-    root.addEventListener("dragover", (e) => {
-      if (!activeDrag) return;
-      if (
-        activeDrag.kind === "gallery" ||
-        activeDrag.kind === "thumb" ||
-        activeDrag.kind === "block"
-      ) {
-        e.preventDefault();
-        root.classList.add("drop-target");
-      }
-    });
-    root.addEventListener("dragleave", (e) => {
-      if (!root.contains(e.relatedTarget)) root.classList.remove("drop-target");
-    });
-    root.addEventListener("drop", (e) => {
-      e.preventDefault();
-      const ok = applyDropOnBlocksTray();
-      endDrag();
-      if (ok) {
-        renderPhotos();
-        renderBlocks();
-      }
-    });
-  }
-
+  bindTrayDropTarget(root);
   updateFolderPreview();
 }
 
@@ -1048,6 +954,9 @@ function initMemoGuide() {
 }
 
 initMemoGuide();
+
+// Bind empty tray drop zone before any blocks exist (gallery → new block).
+renderBlocks();
 
 await loadAuthChrome();
 await loadDefaults();

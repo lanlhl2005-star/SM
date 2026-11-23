@@ -111,9 +111,10 @@
 
       <section class="panel" aria-labelledby="blocks-heading" data-guide-field="11">
         <h2 id="blocks-heading"><span class="guide-num" data-guide="11" aria-hidden="true">11</span> 2. Photo blocks</h2>
-        <div id="blocks" class="blocks"></div>
-        <p id="blocksEmpty" class="hint">No photo blocks yet — select photos above, or drag a photo here to start a block.</p>
-        <p class="dnd-hint">Drag photos to reorder inside a block, drag a gallery photo onto a block to add it, or use ← → / ↑ ↓ handles on phone.</p>
+        <div id="blocks" class="blocks" aria-describedby="blocksEmpty blocksDndHint">
+          <p id="blocksEmpty" class="blocks-empty">Drop a photo here to create a block — or select photos above and use Add as one block.</p>
+        </div>
+        <p id="blocksDndHint" class="dnd-hint">Drag a gallery photo onto this area to start a block. Drag a photo from one block onto another to <b>move</b> it (source clears; empty blocks are removed). Use ← → / ↑ ↓ on phone.</p>
       </section>
 
       <section class="panel" aria-labelledby="fields-heading">
