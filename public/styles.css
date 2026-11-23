@@ -9,6 +9,8 @@
   --accent-2: #c45c26;
   --ok: #1b6b3a;
   --btn-h: 2.55rem;
+  /* Shared height for browse photo grid + photo-blocks tray (APCM-33) */
+  --photo-tray-height: 58vh;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 8px 24px rgba(26, 36, 48, 0.08);
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
@@ -242,7 +244,7 @@ h2 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 0.55rem;
-  max-height: 58vh;
+  max-height: var(--photo-tray-height);
   overflow: auto;
   padding-right: 0.2rem;
 }
@@ -475,9 +477,9 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  /* Slightly taller empty tray; PR #28 max-height + overflow:auto (scroll only when needed) */
-  min-height: 12rem;
-  max-height: min(48vh, 26rem);
+  /* Match browse .photo-grid height; overflow:auto = scrollbar only when needed (APCM-32) */
+  min-height: var(--photo-tray-height);
+  max-height: var(--photo-tray-height);
   overflow: auto;
   padding: 0.55rem;
   border-radius: 8px;
@@ -1037,8 +1039,9 @@ h2 {
   }
 
   .blocks {
-    max-height: min(56vh, 28rem);
-    min-height: 12rem;
+    /* Same tray scale as desktop; browse grid is unbounded on phone */
+    min-height: var(--photo-tray-height);
+    max-height: var(--photo-tray-height);
   }
 
   .block {
