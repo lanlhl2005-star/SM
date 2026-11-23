@@ -12,6 +12,7 @@
     "wa-link": "node scripts/run-with-unc.mjs src/wa-backup/index.js link",
     "wa-backup": "node scripts/run-with-unc.mjs src/wa-backup/index.js run",
     "wa-backup:health": "node scripts/run-with-unc.mjs src/wa-backup/index.js health",
+    "wa-logout": "node scripts/wa-logout.mjs",
     "backup-watch": "node scripts/run-with-unc.mjs src/backup-watch.js",
     "backup-watch:once": "node scripts/run-with-unc.mjs src/backup-watch.js --once",
     "postinstall": "node scripts/patch-baileys-json-imports.mjs",
