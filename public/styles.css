@@ -475,10 +475,10 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  min-height: 9rem;
+  /* Slightly taller empty tray; PR #28 max-height + overflow:auto (scroll only when needed) */
+  min-height: 12rem;
   max-height: min(48vh, 26rem);
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: auto;
   padding: 0.55rem;
   border-radius: 8px;
   border: 2px dashed var(--line);
@@ -1038,7 +1038,7 @@ h2 {
 
   .blocks {
     max-height: min(56vh, 28rem);
-    min-height: 10rem;
+    min-height: 12rem;
   }
 
   .block {
