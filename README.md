@@ -60,6 +60,7 @@ npm run wa-backup
 
 - `wa-link` — scan QR once (or `npm run wa-link -- --phone 852…`); credentials under `.wa-auth\` (**gitignored**, never commit).
 - `wa-backup` — daemon; incoming photos **and PDFs** → `PHOTO_BACKUP_ROOT\<group subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\`), with `.tags.json` sidecars + day `tags.json`.
+- `wa-logout` — clear `.wa-auth\` (and tmp/heartbeat) to unlink / switch WhatsApp number, then `wa-link` again. See [docs/whatsapp-baileys-backup.md](docs/whatsapp-baileys-backup.md#re-link-after-logout--switch-whatsapp-number).
 
 **After every `git pull`:** restart `wa-backup` (Ctrl+C, then `npm run wa-backup`) and restart Draft UI (`npm start`) so new PDF/tag/filter code loads. Auth under `.wa-auth\` is kept — no re-link unless WhatsApp logged the device out. **Tags apply only to newly saved files** (no backfill of older backups).
 

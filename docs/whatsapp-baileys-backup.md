@@ -114,12 +114,46 @@ Leave it running (or register Task Scheduler **At log on** → `scripts\wa-run-d
 2. Confirm a file appears under `Group_photo_backup\<that group’s subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\` for a 1:1 chat).
 3. Restart `npm run wa-backup` — the same message must **not** duplicate (JSON state dedupe).
 
-### Re-link after logout
+### Re-link after logout / switch WhatsApp number
+
+Baileys stores the linked-device session under `.wa-auth\` (`useMultiFileAuthState`). There is **no** hardcoded phone for the normal QR flow. Optional `WA_LINK_PHONE` / `--phone` is only for the pairing-code alternative.
+
+To unlink the current number and link a different one on the Windows PC:
+
+1. Stop the daemon: in the `wa-backup` terminal press **Ctrl+C** (also stop Task Scheduler if it auto-starts `scripts\wa-run-daemon.cmd`).
+2. On the **old** phone: **WhatsApp → Settings → Linked devices** → remove this PC’s linked device (if still listed).
+3. Clear local auth (preferred):
+
+```bat
+npm.cmd run wa-logout
+```
+
+Or manually:
 
 ```bat
 rmdir /s /q .wa-auth
-npm run wa-link
+rmdir /s /q .wa-backup-tmp
+del /q .wa-backup-heartbeat.json
 ```
+
+Optional clean dedupe file: `npm.cmd run wa-logout -- --clear-state` (or `del /q .wa-backup-state.json`). Do **not** delete `Group_photo_backup` — group/day folders stay as-is.
+
+4. If `.env` has `WA_LINK_PHONE=...` for pairing-code link, update it to the new digits or comment it out for QR.
+5. On the **new** phone: free a Linked devices slot, then:
+
+```bat
+npm.cmd run wa-link
+```
+
+Scan the latest QR (or `.wa-auth\qr.png`) with the **new** phone. Pairing code: `npm.cmd run wa-link -- --phone 852xxxxxxxx`.
+
+6. Restart the daemon:
+
+```bat
+npm.cmd run wa-backup
+```
+
+The new account must be a member of the same WhatsApp groups for those group folders to receive new media. Draft UI (`npm start`) does not need a restart for the number switch.
 
 ### After updating the repo
 
@@ -179,6 +213,7 @@ Draft UI browse lists PDFs with a **PDF** badge (filterable by tags) but only **
 | `npm run wa-link` | QR / pairing-code link once |
 | `npm run wa-backup` | Persistent saver daemon |
 | `npm run wa-backup:health` | Exit 0 if heartbeat fresh |
+| `npm run wa-logout` | Clear `.wa-auth` (+ tmp/heartbeat) to switch number / re-link |
 | `npm run backup-watch` | Deprecated Desktop-cache fallback |
 
 ---
