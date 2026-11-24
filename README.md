@@ -2,7 +2,7 @@
 
 Local web UI for **LK-P01043** site memos: browse WhatsApp group photo backups, group photos into ordered `photo_blocks` with captions, fill date/subject/body, and write an unlocked editable **Draft** `.doc` under the Site Memo share.
 
-**Primary photo intake:** Baileys **linked-device** backup (`npm run wa-link` / `npm run wa-backup`) saves incoming **photos and PDFs** into `Group_photo_backup\<WhatsApp group name>\YYYY-MM-DD\` (1:1 chats → `individual\YYYY-MM-DD\`) without disturbing phone or Desktop daily use. Each saved file gets durable tags (sender number, send date/time, nearby caption/message within ±5 minutes). The Draft UI can filter browse by those tags; PDFs are browse/filter-only (not embeddable in memo photo blocks). The older Desktop media-cache watcher is optional/deprecated. Send-to-WhatsApp is **out of scope** (on hold).
+**Primary photo intake:** Baileys **linked-device** backup (`npm run wa-link` / `npm run wa-backup`) saves incoming **photos and PDFs** into `Group_photo_backup\<WhatsApp group name>\YYYY-MM-DD\` (1:1 chats → `individual\YYYY-MM-DD\`) without disturbing phone or Desktop daily use. Each saved file gets durable tags (sender number, send date/time, nearby caption/message within ±5 minutes). When a sender **deletes for everyone** (while the daemon is online), the matching backup file under that tree is removed too. The Draft UI can filter browse by those tags; PDFs are browse/filter-only (not embeddable in memo photo blocks). The older Desktop media-cache watcher is optional/deprecated. Send-to-WhatsApp is **out of scope** (on hold).
 
 ## Quick start (Windows colleagues)
 

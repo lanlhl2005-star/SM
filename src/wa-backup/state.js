@@ -3,7 +3,11 @@ import path from "node:path";
 
 /**
  * Lightweight JSON dedupe store (avoids native better-sqlite3 on Windows PCs).
- * Keys = Baileys msg_key strings; values = { status, dest?, error?, updatedAt }.
+ * Keys = Baileys msg_key strings; values = {
+ *   status: saved|pending|failed|skipped|revoked,
+ *   dest?, dests? (absolute paths under PHOTO_BACKUP_ROOT),
+ *   error?, updatedAt, revokedAt?
+ * }.
  */
 export function loadState(stateFile) {
   try {

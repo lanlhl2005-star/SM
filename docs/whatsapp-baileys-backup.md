@@ -113,6 +113,18 @@ Leave it running (or register Task Scheduler **At log on** → `scripts\wa-run-d
 1. From another account (or a contact), send a photo into a project WhatsApp group.
 2. Confirm a file appears under `Group_photo_backup\<that group’s subject>\YYYY-MM-DD\` (or `individual\YYYY-MM-DD\` for a 1:1 chat).
 3. Restart `npm run wa-backup` — the same message must **not** duplicate (JSON state dedupe).
+4. **Delete for everyone** (WhatsApp’s ~2-day window): have the sender remove that photo/PDF for everyone. With the daemon online, the same file (and its `.tags.json`) should disappear from the day folder. Log line: `deleted backup file due to WhatsApp revoke`.
+
+### Delete for everyone (revoke)
+
+When a sender (or admin) deletes a message **for everyone**, Baileys emits `messages.update` with stub type `REVOKE` (and may also deliver a `protocolMessage` REVOKE). The daemon:
+
+1. Looks up the message key in `.wa-backup-state.json` (durable `dest` / `dests` paths written when media was saved).
+2. Deletes only paths that resolve **under** `PHOTO_BACKUP_ROOT` / `Group_photo_backup` (never outside that tree).
+3. Removes the media file, its `.tags.json` sidecar, and the day-folder `tags.json` index entry.
+4. Marks the state entry `status: "revoked"` so the same key is not re-saved as an orphan.
+
+**Limitation — daemon must be online:** revoke is applied only when the linked-device daemon receives the live event. If `wa-backup` was **offline** when the sender deleted the message, WhatsApp does **not** reliably replay that revoke on reconnect for this linked-device path, so the local file can remain. There is **no** guaranteed catch-up / history backfill for missed revokes. Keep the daemon running (Task Scheduler) for correct delete-on-revoke behavior.
 
 ### Re-link after logout / switch WhatsApp number
 
@@ -223,7 +235,7 @@ Draft UI browse lists PDFs with a **PDF** badge (filterable by tags) but only **
 | Path | Purpose |
 | --- | --- |
 | `.wa-auth\` | Baileys multi-file credentials (**secret**) |
-| `.wa-backup-state.json` | Dedupe by message key |
+| `.wa-backup-state.json` | Dedupe by message key + durable `dest`/`dests` for revoke delete |
 | `.wa-backup-heartbeat.json` | Daemon liveness for `health` |
 | `.wa-backup-tmp\` | In-flight downloads |
 
