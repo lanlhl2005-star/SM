@@ -6,6 +6,8 @@
  * Saves incoming photos and PDFs into PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\.
  * Tags each file (sender, send date, nearby caption ±5 min) via .tags.json sidecars.
  * Group folders use the live WhatsApp group subject (sanitized); 1:1 → individual.
+ * Delete-for-everyone (Baileys REVOKE) removes the mapped backup file(s) under
+ * PHOTO_BACKUP_ROOT while the daemon is online.
  * Does NOT send messages. Phone stays primary; Desktop daily use undisturbed.
  *
  * Patterns adapted from https://github.com/lanlhl2005-star/whatsapp-media-saver

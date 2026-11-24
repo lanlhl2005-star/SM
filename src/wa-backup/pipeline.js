@@ -30,12 +30,19 @@ import {
   senderFromMessageKey,
   writeMediaTags,
 } from "./tags.js";
+import {
+  extractRevokeTargetKey,
+  isRevokeProtocolMessage,
+  isRevokeUpdate,
+  revokeAndDeleteBackup,
+} from "./revoke.js";
 
 /**
  * Incoming media → PHOTO_BACKUP_ROOT\<group-or-individual>\YYYY-MM-DD\<file>
  * Group folder = live WhatsApp subject (sanitized); 1:1 → individual.
  * Saves images + PDFs with tag sidecars. Incoming only; never sends.
- * Patterns adapted from whatsapp-media-saver.
+ * On delete-for-everyone (Baileys REVOKE), deletes mapped backup file(s)
+ * under PHOTO_BACKUP_ROOT only. Patterns adapted from whatsapp-media-saver.
  */
 export function createPipeline({
   baileysCfg,
@@ -149,8 +156,12 @@ export function createPipeline({
 
     const msgKey = buildMsgKey(key);
     const existing = getProcessed(state, msgKey);
-    if (existing?.status === "saved" || existing?.status === "skipped") {
-      logger.debug({ msgKey }, "already processed — skip");
+    if (
+      existing?.status === "saved" ||
+      existing?.status === "skipped" ||
+      existing?.status === "revoked"
+    ) {
+      logger.debug({ msgKey, status: existing?.status }, "already processed — skip");
       return;
     }
 
@@ -204,6 +215,10 @@ export function createPipeline({
       group: groupFolder,
       day,
       dest: absoluteFile,
+      dests: [absoluteFile],
+      remoteJid: chatId,
+      participant: key.participant || "",
+      messageId: key.id || "",
     });
     scheduleSave();
 
@@ -211,7 +226,34 @@ export function createPipeline({
       const tmpName = `${Date.now()}_${shortId}${ext}`;
       const tmpPath = path.join(tmpDir, tmpName);
       try {
+        // Revoke may have won the race while we waited in the download queue.
+        if (getProcessed(state, msgKey)?.status === "revoked") {
+          logger.info(
+            { msgKey },
+            "skipping download — message revoked before save completed"
+          );
+          try {
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+
         await downloadToFile(sock, msg, tmpPath, logger);
+
+        if (getProcessed(state, msgKey)?.status === "revoked") {
+          logger.info(
+            { msgKey },
+            "discarding download — message revoked during download"
+          );
+          try {
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
 
         // Re-check collision at commit time
         let finalAbs = absoluteFile;
@@ -224,6 +266,36 @@ export function createPipeline({
         // Local tmp → UNC share is cross-device; moveFile falls back to
         // copy-into-dest-.moving then rename within the share (avoids EXDEV).
         await moveFile(tmpPath, finalAbs);
+
+        // Persist real path immediately so a concurrent revoke can delete it
+        // (collision rename may differ from the pending dest).
+        const prior = getProcessed(state, msgKey);
+        markProcessed(state, msgKey, {
+          status: prior?.status === "revoked" ? "revoked" : "pending",
+          group: groupFolder,
+          day,
+          dest: finalAbs,
+          dests: [finalAbs],
+          mediaType: classified.kind,
+          remoteJid: chatId,
+          participant: key.participant || "",
+          messageId: key.id || "",
+          revokedAt: prior?.revokedAt,
+        });
+        scheduleSave();
+
+        if (getProcessed(state, msgKey)?.status === "revoked") {
+          handleRevokeForKey(
+            {
+              remoteJid: chatId,
+              id: key.id || "",
+              fromMe: Boolean(key.fromMe),
+              participant: key.participant || "",
+            },
+            { afterSaveRace: true }
+          );
+          return;
+        }
 
         const captions = extractNearbyCaptions({
           mediaTs: ts,
@@ -255,12 +327,30 @@ export function createPipeline({
           destPath: finalAbs,
         });
 
+        // Final race: if revoked during tag write, delete immediately.
+        if (getProcessed(state, msgKey)?.status === "revoked") {
+          handleRevokeForKey(
+            {
+              remoteJid: chatId,
+              id: key.id || "",
+              fromMe: Boolean(key.fromMe),
+              participant: key.participant || "",
+            },
+            { afterSaveRace: true }
+          );
+          return;
+        }
+
         markProcessed(state, msgKey, {
           status: "saved",
           group: groupFolder,
           day,
           dest: finalAbs,
+          dests: [finalAbs],
           mediaType: classified.kind,
+          remoteJid: chatId,
+          participant: key.participant || "",
+          messageId: key.id || "",
         });
         scheduleSave();
 
@@ -279,11 +369,13 @@ export function createPipeline({
         } catch {
           /* ignore */
         }
+        if (getProcessed(state, msgKey)?.status === "revoked") return;
         markProcessed(state, msgKey, {
           status: "failed",
           group: groupFolder,
           day,
           dest: absoluteFile,
+          dests: [absoluteFile],
           error: err?.message || String(err),
         });
         scheduleSave();
@@ -292,17 +384,85 @@ export function createPipeline({
     });
   }
 
+  /**
+   * Delete local backup file(s) for a revoked WhatsApp message key.
+   * @param {{ remoteJid: string, id: string, fromMe: boolean, participant: string }} targetKey
+   * @param {{ afterSaveRace?: boolean }} [meta]
+   */
+  function handleRevokeForKey(targetKey, meta = {}) {
+    if (!targetKey?.id) return;
+    const result = revokeAndDeleteBackup({
+      state,
+      targetKey,
+      photoBackupRoot,
+    });
+    scheduleSave();
+
+    if (result.noMapping) {
+      logger.info(
+        {
+          remoteJid: targetKey.remoteJid,
+          id: targetKey.id,
+          participant: targetKey.participant || undefined,
+        },
+        "revoke received but no local backup mapping — nothing to delete"
+      );
+      return;
+    }
+
+    for (const file of result.deleted) {
+      logger.info(
+        {
+          file,
+          msgKeys: result.matchedKeys,
+          afterSaveRace: meta.afterSaveRace || undefined,
+        },
+        "deleted backup file due to WhatsApp revoke (delete for everyone)"
+      );
+    }
+    for (const file of result.skipped) {
+      logger.warn(
+        { file, msgKeys: result.matchedKeys },
+        "revoke skip — path outside PHOTO_BACKUP_ROOT"
+      );
+    }
+    for (const e of result.errors) {
+      logger.error(
+        { file: e.path, err: e.error, msgKeys: result.matchedKeys },
+        "revoke delete failed"
+      );
+    }
+  }
+
+  function handleRevokeSource(source) {
+    const targetKey = extractRevokeTargetKey(source);
+    if (!targetKey) return;
+    handleRevokeForKey(targetKey);
+  }
+
   function onMessagesUpsert(upsert) {
     const messages = upsert?.messages || [];
     for (const msg of messages) {
+      if (isRevokeProtocolMessage(msg)) {
+        handleRevokeSource(msg);
+        continue;
+      }
       handleIncomingMedia(msg).catch((err) => {
         logger.error({ err: err?.message }, "handleIncomingMedia error");
       });
     }
   }
 
+  function onMessagesUpdate(updates) {
+    for (const item of updates || []) {
+      if (!isRevokeUpdate(item)) continue;
+      handleRevokeSource(item);
+    }
+  }
+
   function attach() {
     sock.ev.on("messages.upsert", onMessagesUpsert);
+    sock.ev.on("messages.update", onMessagesUpdate);
     sock.ev.on("groups.update", (updates) => {
       for (const u of updates || []) {
         if (u.id && u.subject) groupNames.set(u.id, u.subject);
@@ -335,6 +495,8 @@ export function createPipeline({
     touch,
     queue,
     handleIncomingMedia,
+    handleRevokeForKey,
+    onMessagesUpdate,
     chatEvents,
   };
 }
